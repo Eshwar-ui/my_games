@@ -1,5 +1,21 @@
 # Neon Games Flutter App
 
+## 📥 Getting the Project from GitHub
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/neon_games_flutter.git
+   cd neon_games_flutter
+   ```
+2. **Install dependencies:**
+   ```bash
+   flutter pub get
+   ```
+3. **Run the app:**
+   ```bash
+   flutter run
+   ```
+
 Welcome to **Neon Games** – a modern, multi-game Flutter app featuring a collection of classic and arcade games, all reimagined with a vibrant neon aesthetic!
 
 ## 🎮 Included Games
@@ -33,22 +49,6 @@ Welcome to **Neon Games** – a modern, multi-game Flutter app featuring a colle
 - **High Score Tracking:** Brick Breaker, Tetris, Snake, and 2048 save your best scores using persistent storage.
 - **Mobile & Desktop Ready:** Fully playable on Android, iOS, web, Windows, macOS, and Linux.
 - **No Ads, No Paywalls:** 100% free and open source.
-
-## 🚀 Getting Started
-
-1. **Clone this repo:**
-   ```bash
-   git clone https://github.com/yourusername/neon_games_flutter.git
-   cd neon_games_flutter
-   ```
-2. **Install dependencies:**
-   ```bash
-   flutter pub get
-   ```
-3. **Run the app:**
-   ```bash
-   flutter run
-   ```
 
 ## 📸 Screenshots
 

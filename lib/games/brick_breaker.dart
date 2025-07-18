@@ -139,9 +139,23 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
               _saveHighScore();
             }
             if (bricks.every((row) => row.every((b) => !b))) {
-              isPlaying = false;
-              isGameWon = true;
-              gameTimer?.cancel();
+              // All bricks cleared: generate new random layer and increase difficulty
+              final rand = Random();
+              bricks = List.generate(rowCount, (row) {
+                // Generate a random row with a bias towards true
+                List<bool> brickRow = List.generate(
+                  colCount,
+                  (_) => rand.nextDouble() < 0.7,
+                );
+                // Ensure at least one brick per row
+                if (!brickRow.contains(true)) {
+                  brickRow[rand.nextInt(colCount)] = true;
+                }
+                return brickRow;
+              });
+              // Optionally, increase ball speed for challenge
+              ballVX *= 1.05;
+              ballVY *= 1.05;
             }
             return;
           }

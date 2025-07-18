@@ -98,24 +98,25 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
       Point<int> newHead;
       switch (direction) {
         case Direction.up:
-          newHead = Point(head.x, head.y - 1);
+          newHead = Point(head.x, (head.y - 1 + rowCount) % rowCount);
           break;
         case Direction.down:
-          newHead = Point(head.x, head.y + 1);
+          newHead = Point(head.x, (head.y + 1) % rowCount);
           break;
         case Direction.left:
-          newHead = Point(head.x - 1, head.y);
+          newHead = Point((head.x - 1 + colCount) % colCount, head.y);
           break;
         case Direction.right:
-          newHead = Point(head.x + 1, head.y);
+          newHead = Point((head.x + 1) % colCount, head.y);
           break;
       }
-      if (_isCollision(newHead)) {
+      final bool growing = (newHead == food);
+      if (_isCollision(newHead, growing)) {
         _endGame();
         return;
       }
       snake = [newHead, ...snake];
-      if (newHead == food) {
+      if (growing) {
         score++;
         food = _randomFood();
       } else {
@@ -124,9 +125,10 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
     });
   }
 
-  bool _isCollision(Point<int> p) {
-    if (p.x < 0 || p.x >= colCount || p.y < 0 || p.y >= rowCount) return true;
-    if (snake.contains(p)) return true;
+  bool _isCollision(Point<int> p, bool growing) {
+    // Only check for self-collision
+    final body = growing ? snake : snake.sublist(0, snake.length - 1);
+    if (body.contains(p)) return true;
     return false;
   }
 
@@ -137,21 +139,36 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
         (a == Direction.right && b == Direction.left);
   }
 
-  void _onVerticalDragUpdate(DragUpdateDetails details) {
-    if (details.primaryDelta == null) return;
-    if (details.primaryDelta! < 0) {
-      nextDirection = Direction.up;
-    } else if (details.primaryDelta! > 0) {
-      nextDirection = Direction.down;
-    }
+  Offset? _dragStart;
+  Offset? _dragUpdate;
+
+  void _onPanStart(DragStartDetails details) {
+    _dragStart = details.localPosition;
+    _dragUpdate = details.localPosition;
   }
 
-  void _onHorizontalDragUpdate(DragUpdateDetails details) {
-    if (details.primaryDelta == null) return;
-    if (details.primaryDelta! < 0) {
-      nextDirection = Direction.left;
-    } else if (details.primaryDelta! > 0) {
-      nextDirection = Direction.right;
+  void _onPanUpdate(DragUpdateDetails details) {
+    _dragUpdate = details.localPosition;
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    if (_dragStart == null || _dragUpdate == null) return;
+    final Offset delta = _dragUpdate! - _dragStart!;
+    _dragStart = null;
+    _dragUpdate = null;
+    if (delta.distance < 40) return; // Minimum swipe distance
+    if (delta.dx.abs() > delta.dy.abs()) {
+      if (delta.dx > 0) {
+        nextDirection = Direction.right;
+      } else {
+        nextDirection = Direction.left;
+      }
+    } else {
+      if (delta.dy > 0) {
+        nextDirection = Direction.down;
+      } else {
+        nextDirection = Direction.up;
+      }
     }
   }
 
@@ -236,22 +253,12 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
                         ? constraints.maxWidth
                         : constraints.maxHeight;
                     return GestureDetector(
-                      onVerticalDragUpdate: _onVerticalDragUpdate,
-                      onHorizontalDragUpdate: _onHorizontalDragUpdate,
-                      child: Container(
+                      onPanStart: _onPanStart,
+                      onPanUpdate: _onPanUpdate,
+                      onPanEnd: _onPanEnd,
+                      child: SizedBox(
                         width: size,
                         height: size,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.04),
-                          border: Border.all(color: neonGreen, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonGreen.withOpacity(0.2),
-                              blurRadius: 16,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
                         child: _buildGrid(
                           neonGreen,
                           neonPink,
@@ -262,6 +269,50 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
                     );
                   },
                 ),
+              ),
+            ),
+            // Directional buttons
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _directionButton(
+                        Icons.arrow_upward,
+                        Direction.up,
+                        neonGreen,
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _directionButton(
+                        Icons.arrow_back,
+                        Direction.left,
+                        neonGreen,
+                      ),
+                      const SizedBox(width: 32),
+                      _directionButton(
+                        Icons.arrow_forward,
+                        Direction.right,
+                        neonGreen,
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _directionButton(
+                        Icons.arrow_downward,
+                        Direction.down,
+                        neonGreen,
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             if (isGameOver)
@@ -305,90 +356,74 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
       builder: (context, constraints) {
         final cellWidth = constraints.maxWidth / colCount;
         final cellHeight = constraints.maxHeight / rowCount;
-        if (_floatController == null) {
-          // Fallback: just render the food and snake without animation
-          return Stack(
-            children: [
-              Positioned(
-                left: food.x * cellWidth,
-                top: food.y * cellHeight,
-                child: _realisticFood(cellWidth, cellHeight, neonGreen),
-              ),
-              ...List.generate(snake.length, (i) {
-                final p = snake[snake.length - 1 - i];
-                final isHead = (p == snake.first);
-                return Positioned(
-                  left: p.x * cellWidth,
-                  top: p.y * cellHeight,
-                  width: cellWidth,
-                  height: cellHeight,
-                  child: isHead
-                      ? _realisticHead(
-                          cellWidth,
-                          cellHeight,
-                          neonBlue,
-                          direction,
-                        )
-                      : _realisticBodySegment(
-                          cellWidth,
-                          cellHeight,
-                          neonPink,
-                          neonBlue,
-                          i,
-                          snake.length,
-                        ),
-                );
-              }),
-            ],
-          );
-        }
-        return AnimatedBuilder(
-          animation: _floatController!,
-          builder: (context, child) {
-            return Stack(
-              children: [
-                // Food
-                Positioned(
-                  left: food.x * cellWidth,
-                  top: food.y * cellHeight,
-                  child: _realisticFood(cellWidth, cellHeight, neonGreen),
-                ),
-                // Snake body (draw from tail to head for overlap effect)
-                ...List.generate(snake.length, (i) {
-                  final p = snake[snake.length - 1 - i];
-                  final isHead = (p == snake.first);
-                  // Floating effect: sine wave offset, phase per segment
-                  final t = _floatController!.value * 2 * 3.14159;
-                  final floatOffset = sin(t + i * 0.6) * cellHeight * 0.10;
-                  // Smooth movement: animate between previous and current position
-                  // For simplicity, use AnimatedPositioned for each segment
-                  return AnimatedPositioned(
-                    duration: tickDuration,
-                    curve: Curves.easeInOut,
-                    left: p.x * cellWidth,
-                    top: p.y * cellHeight + floatOffset,
+        return Table(
+          defaultColumnWidth: FixedColumnWidth(cellWidth),
+          children: List.generate(rowCount, (y) {
+            return TableRow(
+              children: List.generate(colCount, (x) {
+                final point = Point(x, y);
+                if (snake.isNotEmpty && point == snake.first) {
+                  // Snake head
+                  return Container(
                     width: cellWidth,
                     height: cellHeight,
-                    child: isHead
-                        ? _realisticHead(
-                            cellWidth,
-                            cellHeight,
-                            neonBlue,
-                            direction,
-                          )
-                        : _realisticBodySegment(
-                            cellWidth,
-                            cellHeight,
-                            neonPink,
-                            neonBlue,
-                            i,
-                            snake.length,
-                          ),
+                    margin: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: neonBlue,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
                   );
-                }),
-              ],
+                } else if (snake.contains(point)) {
+                  // Snake body
+                  return Container(
+                    width: cellWidth,
+                    height: cellHeight,
+                    margin: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: neonPink,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
+                  );
+                } else if (point == food) {
+                  // Food
+                  return Container(
+                    width: cellWidth,
+                    height: cellHeight,
+                    margin: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: neonGreen,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: neonGreen.withOpacity(0.5),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.star,
+                      color: Colors.white,
+                      size: cellWidth * 0.6,
+                    ),
+                  );
+                } else {
+                  // Empty cell
+                  return Container(
+                    width: cellWidth,
+                    height: cellHeight,
+                    margin: const EdgeInsets.all(1),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  );
+                }
+              }),
             );
-          },
+          }),
         );
       },
     );
@@ -603,6 +638,44 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
           ],
         ),
         child: Icon(Icons.star, color: Colors.white, size: w * 0.5),
+      ),
+    );
+  }
+
+  Widget _directionButton(IconData icon, Direction dir, Color color) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(32),
+          onTap: () {
+            // Prevent reversing direction
+            if (!_isOpposite(dir, direction) && isStarted && !isGameOver) {
+              setState(() {
+                nextDirection = dir;
+              });
+              _tick(); // Move the snake instantly
+            }
+          },
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              border: Border.all(color: color, width: 2),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Icon(icon, color: color, size: 32),
+          ),
+        ),
       ),
     );
   }

@@ -10,8 +10,8 @@ class TetrisGame extends StatefulWidget {
   State<TetrisGame> createState() => _TetrisGameState();
 }
 
-const int rowCount = 20;
-const int colCount = 10;
+const int rowCount = 24;
+const int colCount = 14;
 const int blockSize = 20;
 
 // Funky neon colors for blocks
@@ -291,7 +291,6 @@ class _TetrisGameState extends State<TetrisGame> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final maxGridHeight = constraints.maxHeight * 0.6;
             if (!isStarted || isGameOver) {
               return Center(
                 child: Column(
@@ -372,42 +371,31 @@ class _TetrisGameState extends State<TetrisGame> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Center(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      // No border radius for sharp corners
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
-                          blurRadius: 24,
-                          spreadRadius: 2,
+                Expanded(
+                  child: Center(
+                    child: AspectRatio(
+                      aspectRatio: colCount / rowCount,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          border: Border.all(
+                            color: const Color(0xFF00FFF7),
+                            width: 2,
+                          ),
+                          backgroundBlendMode: BlendMode.overlay,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 24,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        border: Border.all(
-                          color: const Color(0xFF00FFF7),
-                          width: 2,
-                        ),
-                        backgroundBlendMode: BlendMode.overlay,
-                        // No borderRadius
-                      ),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxHeight: maxGridHeight,
-                          maxWidth: constraints.maxWidth,
-                        ),
-                        child: AspectRatio(
-                          aspectRatio: colCount / rowCount,
-                          child: _buildGrid(),
-                        ),
+                        child: _buildGrid(),
                       ),
                     ),
                   ),
                 ),
-                const Spacer(),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,

@@ -11,8 +11,8 @@ class Game2048 extends StatefulWidget {
 
 const int gridSize = 4;
 
-class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
-  late List<List<int>> board;
+class _Game2048State extends State<Game2048> {
+  List<List<int>>? board;
   int score = 0;
   int highScore = 0;
   bool isGameOver = false;
@@ -54,18 +54,18 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
     final empty = <Point<int>>[];
     for (int y = 0; y < gridSize; y++) {
       for (int x = 0; x < gridSize; x++) {
-        if (board[y][x] == 0) empty.add(Point(x, y));
+        if (board![y][x] == 0) empty.add(Point(x, y));
       }
     }
     if (empty.isEmpty) return;
     final p = empty[Random().nextInt(empty.length)];
-    board[p.y][p.x] = Random().nextDouble() < 0.9 ? 2 : 4;
+    board![p.y][p.x] = Random().nextDouble() < 0.9 ? 2 : 4;
   }
 
   void _move(Direction dir) async {
     if (isMoving || isGameOver || isGameWon) return;
     setState(() => isMoving = true);
-    final oldBoard = board.map((row) => [...row]).toList();
+    final oldBoard = board!.map((row) => [...row]).toList();
     int gained = 0;
     List<List<bool>> merged = List.generate(
       gridSize,
@@ -91,7 +91,7 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
       }
       _setLine(i, dir, mergedLine);
     }
-    if (!_boardsEqual(oldBoard, board)) {
+    if (!_boardsEqual(oldBoard, board!)) {
       moved = true;
       setState(() {
         score += gained;
@@ -112,30 +112,30 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
   List<int> _getLine(int i, Direction dir) {
     switch (dir) {
       case Direction.left:
-        return board[i];
+        return board![i];
       case Direction.right:
-        return board[i].reversed.toList();
+        return board![i].reversed.toList();
       case Direction.up:
-        return [for (int j = 0; j < gridSize; j++) board[j][i]];
+        return [for (int j = 0; j < gridSize; j++) board![j][i]];
       case Direction.down:
-        return [for (int j = gridSize - 1; j >= 0; j--) board[j][i]];
+        return [for (int j = gridSize - 1; j >= 0; j--) board![j][i]];
     }
   }
 
   void _setLine(int i, Direction dir, List<int> line) {
     switch (dir) {
       case Direction.left:
-        board[i] = line;
+        board![i] = line;
         break;
       case Direction.right:
-        board[i] = line.reversed.toList();
+        board![i] = line.reversed.toList();
         break;
       case Direction.up:
-        for (int j = 0; j < gridSize; j++) board[j][i] = line[j];
+        for (int j = 0; j < gridSize; j++) board![j][i] = line[j];
         break;
       case Direction.down:
         for (int j = gridSize - 1, k = 0; j >= 0; j--, k++)
-          board[j][i] = line[k];
+          board![j][i] = line[k];
         break;
     }
   }
@@ -152,29 +152,40 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
   bool _isGameOver() {
     for (int y = 0; y < gridSize; y++) {
       for (int x = 0; x < gridSize; x++) {
-        if (board[y][x] == 0) return false;
-        if (x < gridSize - 1 && board[y][x] == board[y][x + 1]) return false;
-        if (y < gridSize - 1 && board[y][x] == board[y + 1][x]) return false;
+        if (board![y][x] == 0) return false;
+        if (x < gridSize - 1 && board![y][x] == board![y][x + 1]) return false;
+        if (y < gridSize - 1 && board![y][x] == board![y + 1][x]) return false;
       }
     }
     return true;
   }
 
-  void _onVerticalDrag(DragUpdateDetails details) {
-    if (details.primaryDelta == null) return;
-    if (details.primaryDelta! < -8) {
-      _move(Direction.up);
-    } else if (details.primaryDelta! > 8) {
-      _move(Direction.down);
-    }
+  Offset? _dragStart;
+
+  void _onPanStart(DragStartDetails details) {
+    _dragStart = details.localPosition;
   }
 
-  void _onHorizontalDrag(DragUpdateDetails details) {
-    if (details.primaryDelta == null) return;
-    if (details.primaryDelta! < -8) {
-      _move(Direction.left);
-    } else if (details.primaryDelta! > 8) {
-      _move(Direction.right);
+  void _onPanEnd(DragEndDetails details) {
+    if (_dragStart == null) return;
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final Offset dragEnd = box.globalToLocal(details.velocity.pixelsPerSecond);
+    final Offset delta = dragEnd - _dragStart!;
+    _dragStart = null;
+    if (delta.distance < 40) return; // Minimum swipe distance
+    if (delta.dx.abs() > delta.dy.abs()) {
+      if (delta.dx > 0) {
+        _move(Direction.right);
+      } else {
+        _move(Direction.left);
+      }
+    } else {
+      if (delta.dy > 0) {
+        _move(Direction.down);
+      } else {
+        _move(Direction.up);
+      }
     }
   }
 
@@ -262,8 +273,8 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
                         ? constraints.maxWidth
                         : constraints.maxHeight;
                     return GestureDetector(
-                      onVerticalDragUpdate: _onVerticalDrag,
-                      onHorizontalDragUpdate: _onHorizontalDrag,
+                      onPanStart: _onPanStart,
+                      onPanEnd: _onPanEnd,
                       child: Container(
                         width: size,
                         height: size,
@@ -318,6 +329,9 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
   }
 
   Widget _buildGrid(List<Color> neonTileColors) {
+    if (board == null) {
+      return const SizedBox.shrink();
+    }
     return GridView.builder(
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -327,7 +341,7 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
       itemBuilder: (context, index) {
         int x = index % gridSize;
         int y = index ~/ gridSize;
-        int value = board[y][x];
+        int value = board![y][x];
         return _neonTile(value, neonTileColors);
       },
     );
@@ -335,7 +349,8 @@ class _Game2048State extends State<Game2048> with TickerProviderStateMixin {
 
   Widget _neonTile(int value, List<Color> neonTileColors) {
     if (value == 0) {
-      return Container(
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
         margin: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.01),

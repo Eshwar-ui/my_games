@@ -5,6 +5,8 @@ import 'games/brick_breaker.dart';
 import 'games/tetris.dart';
 import 'games/snake.dart';
 import 'games/game_2048.dart';
+import 'games/flappy_bird.dart';
+import 'games/space_war.dart';
 
 void main() {
   runApp(const MyApp());
@@ -57,83 +59,119 @@ class GameSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: false,
       appBar: AppBar(title: const Text('Select a Game'), centerTitle: true),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _neonGameTile(
-                context,
-                title: 'Tic-Tac-Toe',
-                icon: Icons.grid_3x3,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TicTacToeGame(),
-                    ),
-                  );
-                },
-                color: const Color(0xFF00FFF7),
-              ),
-              const SizedBox(height: 32),
-              _neonGameTile(
-                context,
-                title: 'Brick Breaker',
-                icon: Icons.sports_tennis,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const BrickBreakerGame(),
-                    ),
-                  );
-                },
-                color: const Color(0xFFFFA500),
-              ),
-              const SizedBox(height: 32),
-              _neonGameTile(
-                context,
-                title: 'Tetris',
-                icon: Icons.view_column,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const TetrisGame()),
-                  );
-                },
-                color: const Color(0xFFFF00FF),
-              ),
-              const SizedBox(height: 32),
-              _neonGameTile(
-                context,
-                title: 'Snake',
-                icon: Icons.show_chart,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SnakeGame()),
-                  );
-                },
-                color: const Color(0xFF39FF14),
-              ),
-              const SizedBox(height: 32),
-              _neonGameTile(
-                context,
-                title: '2048',
-                icon: Icons.grid_4x4,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const Game2048()),
-                  );
-                },
-                color: const Color(0xFFFFA500),
-              ),
-            ],
+      body: SingleChildScrollView(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _neonGameTile(
+                  context,
+                  title: 'Tic-Tac-Toe',
+                  icon: Icons.grid_3x3,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TicTacToeGame(),
+                      ),
+                    );
+                  },
+                  color: const Color(0xFF00FFF7),
+                ),
+                const SizedBox(height: 32),
+                _neonGameTile(
+                  context,
+                  title: 'Brick Breaker',
+                  icon: Icons.sports_tennis,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BrickBreakerGame(),
+                      ),
+                    );
+                  },
+                  color: const Color(0xFFFFA500),
+                ),
+                const SizedBox(height: 32),
+                _neonGameTile(
+                  context,
+                  title: 'Tetris',
+                  icon: Icons.view_column,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TetrisGame(),
+                      ),
+                    );
+                  },
+                  color: const Color(0xFFFF00FF),
+                ),
+                const SizedBox(height: 32),
+                _neonGameTile(
+                  context,
+                  title: 'Snake',
+                  icon: Icons.show_chart,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SnakeGame(),
+                      ),
+                    );
+                  },
+                  color: const Color(0xFF39FF14),
+                ),
+                const SizedBox(height: 32),
+                _neonGameTile(
+                  context,
+                  title: '2048',
+                  icon: Icons.grid_4x4,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const Game2048()),
+                    );
+                  },
+                  color: const Color(0xFFFFA500),
+                ),
+                const SizedBox(height: 32),
+                _neonGameTile(
+                  context,
+                  title: 'Flappy Bird',
+                  icon: Icons.flight,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const FlappyBirdGame(),
+                      ),
+                    );
+                  },
+                  color: const Color(0xFFFFFF00),
+                ),
+                const SizedBox(height: 32),
+                _neonGameTile(
+                  context,
+                  title: 'Space War',
+                  icon: Icons.sports_esports,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SpaceWarGame(),
+                      ),
+                    );
+                  },
+                  color: const Color(0xFF00FFF7),
+                ),
+              ],
+            ),
           ),
         ),
       ),
