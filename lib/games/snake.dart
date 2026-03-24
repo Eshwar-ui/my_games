@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../widgets/arcade_button.dart';
+
 class SnakeGame extends StatefulWidget {
   const SnakeGame({super.key});
 
@@ -52,11 +54,12 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   }
 
   void _startGame() {
+    final initialSnake = [const Point(10, 10)];
     setState(() {
-      snake = [const Point(10, 10)];
+      snake = initialSnake;
       direction = Direction.right;
       nextDirection = null;
-      food = _randomFood();
+      food = _randomFood(initialSnake);
       isGameOver = false;
       score = 0;
       isStarted = true;
@@ -79,48 +82,62 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
     }
   }
 
-  Point<int> _randomFood() {
+  Point<int> _randomFood([List<Point<int>>? occupied]) {
     final rand = Random();
+    final blocked = occupied ?? snake;
     Point<int> p;
     do {
       p = Point(rand.nextInt(colCount), rand.nextInt(rowCount));
-    } while (snake.contains(p));
+    } while (blocked.contains(p));
     return p;
   }
 
   void _tick() {
+    if (!isStarted || isGameOver) return;
+
+    final pendingDirection = nextDirection;
+    final nextDir =
+        pendingDirection != null && !_isOpposite(pendingDirection, direction)
+        ? pendingDirection
+        : direction;
+    final head = snake.first;
+    late final Point<int> newHead;
+    switch (nextDir) {
+      case Direction.up:
+        newHead = Point(head.x, (head.y - 1 + rowCount) % rowCount);
+        break;
+      case Direction.down:
+        newHead = Point(head.x, (head.y + 1) % rowCount);
+        break;
+      case Direction.left:
+        newHead = Point((head.x - 1 + colCount) % colCount, head.y);
+        break;
+      case Direction.right:
+        newHead = Point((head.x + 1) % colCount, head.y);
+        break;
+    }
+
+    final growing = newHead == food;
+    if (_isCollision(newHead, growing)) {
+      _endGame();
+      return;
+    }
+
+    final updatedSnake = [newHead, ...snake];
+    Point<int>? nextFoodPosition;
+    if (growing) {
+      nextFoodPosition = _randomFood(updatedSnake);
+    } else {
+      updatedSnake.removeLast();
+    }
+
     setState(() {
-      final newDir = nextDirection;
-      if (newDir != null && !_isOpposite(newDir, direction)) {
-        direction = newDir;
-      }
-      final head = snake.first;
-      Point<int> newHead;
-      switch (direction) {
-        case Direction.up:
-          newHead = Point(head.x, (head.y - 1 + rowCount) % rowCount);
-          break;
-        case Direction.down:
-          newHead = Point(head.x, (head.y + 1) % rowCount);
-          break;
-        case Direction.left:
-          newHead = Point((head.x - 1 + colCount) % colCount, head.y);
-          break;
-        case Direction.right:
-          newHead = Point((head.x + 1) % colCount, head.y);
-          break;
-      }
-      final bool growing = (newHead == food);
-      if (_isCollision(newHead, growing)) {
-        _endGame();
-        return;
-      }
-      snake = [newHead, ...snake];
+      direction = nextDir;
+      nextDirection = null;
+      snake = updatedSnake;
       if (growing) {
         score++;
-        food = _randomFood();
-      } else {
-        snake.removeLast();
+        food = nextFoodPosition!;
       }
     });
   }
@@ -459,39 +476,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   }
 
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 3),
-            color: Colors.white.withOpacity(0.08),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 22,
-              fontFamily: 'Orbitron',
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 8)],
-            ),
-          ),
-        ),
-      ),
-    );
+    return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
 
   Widget _realisticHead(double w, double h, Color color, Direction dir) {
@@ -645,37 +630,18 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   Widget _directionButton(IconData icon, Direction dir, Color color) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(32),
-          onTap: () {
-            // Prevent reversing direction
-            if (!_isOpposite(dir, direction) && isStarted && !isGameOver) {
-              setState(() {
-                nextDirection = dir;
-              });
-              _tick(); // Move the snake instantly
-            }
-          },
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.15),
-              border: Border.all(color: color, width: 2),
-              borderRadius: BorderRadius.circular(32),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withOpacity(0.3),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Icon(icon, color: color, size: 32),
-          ),
-        ),
+      child: ArcadeIconButton(
+        icon: icon,
+        color: color,
+        size: 74,
+        iconSize: 34,
+        onPressed: () {
+          if (!_isOpposite(dir, direction) && isStarted && !isGameOver) {
+            setState(() {
+              nextDirection = dir;
+            });
+          }
+        },
       ),
     );
   }

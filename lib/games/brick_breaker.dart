@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../widgets/arcade_button.dart';
+
 class BrickBreakerGame extends StatefulWidget {
   const BrickBreakerGame({super.key});
 
@@ -27,7 +29,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   List<List<bool>> bricks = [];
   bool isPlaying = false;
   bool isGameOver = false;
-  bool isGameWon = false;
   Timer? gameTimer;
   Size? lastSize;
   int highScore = 0;
@@ -59,7 +60,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
     bricks = List.generate(rowCount, (_) => List.filled(colCount, true));
     isPlaying = true;
     isGameOver = false;
-    isGameWon = false;
     gameTimer?.cancel();
     gameTimer = Timer.periodic(
       const Duration(milliseconds: 12),
@@ -85,6 +85,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
 
   void _updateGame(double width, double height) {
     if (!isPlaying) return;
+    var shouldSaveHighScore = false;
     setState(() {
       ballX += ballVX;
       ballY += ballVY;
@@ -136,7 +137,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
             int score = _calculateScore();
             if (score > highScore) {
               highScore = score;
-              _saveHighScore();
+              shouldSaveHighScore = true;
             }
             if (bricks.every((row) => row.every((b) => !b))) {
               // All bricks cleared: generate new random layer and increase difficulty
@@ -168,6 +169,9 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
         gameTimer?.cancel();
       }
     });
+    if (shouldSaveHighScore) {
+      _saveHighScore();
+    }
   }
 
   void _movePaddleTo(double dx, double width) {
@@ -221,10 +225,10 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
           ),
           IconButton(
             icon: Icon(Icons.refresh, color: neonGreen),
-            onPressed: () => _startGame(
-              MediaQuery.of(context).size.width,
-              MediaQuery.of(context).size.height,
-            ),
+            onPressed: () {
+              final size = lastSize ?? MediaQuery.sizeOf(context);
+              _startGame(size.width, size.height);
+            },
             tooltip: 'Restart Game',
           ),
         ],
@@ -303,7 +307,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
                       ),
                     ),
                   ),
-                  if (isGameOver || isGameWon)
+                  if (isGameOver)
                     Center(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -325,17 +329,16 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              isGameWon ? 'You Win!' : 'Game Over',
+                              'Game Over',
                               style: TextStyle(
                                 fontSize: 32,
                                 fontFamily: 'Orbitron',
-                                color: isGameWon ? neonGreen : neonRed,
+                                color: neonRed,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 2,
                                 shadows: [
                                   Shadow(
-                                    color: (isGameWon ? neonGreen : neonRed)
-                                        .withOpacity(0.5),
+                                    color: neonRed.withOpacity(0.5),
                                     blurRadius: 8,
                                   ),
                                 ],
@@ -345,7 +348,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
                             _neonButton(
                               'Restart',
                               () => _startGame(width, height),
-                              isGameWon ? neonGreen : neonRed,
+                              neonRed,
                             ),
                           ],
                         ),
@@ -396,38 +399,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   }
 
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 3),
-            color: Colors.white.withOpacity(0.08),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 22,
-              fontFamily: 'Orbitron',
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 8)],
-            ),
-          ),
-        ),
-      ),
-    );
+    return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
 }

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../widgets/arcade_button.dart';
+
 class TetrisGame extends StatefulWidget {
   const TetrisGame({super.key});
 
@@ -130,9 +132,10 @@ class _TetrisGameState extends State<TetrisGame> {
       isGameOver = false;
       score = 0;
       isStarted = true;
-      _spawnTetromino();
-      next = _randomTetromino();
+      current = null;
+      next = null;
     });
+    _spawnTetromino();
     timer?.cancel();
     timer = Timer.periodic(const Duration(milliseconds: 400), (_) => _tick());
   }
@@ -146,18 +149,32 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   void _spawnTetromino() {
-    current = next ?? _randomTetromino();
-    next = _randomTetromino();
-    if (_collides(current!)) {
-      isGameOver = true;
+    final spawned = next ?? _randomTetromino();
+    final upcoming = _randomTetromino();
+    final hasCollision = _collides(spawned);
+    final shouldSaveHighScore = score > highScore;
+
+    if (hasCollision) {
       timer?.cancel();
-      if (score > highScore) {
-        setState(() {
+      setState(() {
+        current = spawned;
+        next = upcoming;
+        isGameOver = true;
+        isStarted = false;
+        if (shouldSaveHighScore) {
           highScore = score;
-        });
+        }
+      });
+      if (shouldSaveHighScore) {
         _saveHighScore();
       }
+      return;
     }
+
+    setState(() {
+      current = spawned;
+      next = upcoming;
+    });
   }
 
   bool _collides(Tetromino t) {
@@ -451,38 +468,13 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   Widget _neonStartButton() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: _startGame,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 20),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF00FFF7), width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF00FFF7).withOpacity(0.5),
-                blurRadius: 24,
-                spreadRadius: 2,
-              ),
-            ],
-            color: Colors.white.withOpacity(0.08),
-          ),
-          child: const Text(
-            'START GAME',
-            style: TextStyle(
-              fontSize: 28,
-              fontFamily: 'Orbitron',
-              color: Color(0xFF00FFF7),
-              fontWeight: FontWeight.bold,
-              letterSpacing: 4,
-              shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
-            ),
-          ),
-        ),
-      ),
+    return ArcadeButton(
+      label: 'START GAME',
+      color: const Color(0xFF00FFF7),
+      onPressed: _startGame,
+      minWidth: 240,
+      minHeight: 72,
+      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 20),
     );
   }
 
@@ -493,30 +485,12 @@ class _TetrisGameState extends State<TetrisGame> {
     double size = 64,
     double iconSize = 36,
   }) {
-    return Material(
-      color: Colors.white.withOpacity(0.08),
-      borderRadius: BorderRadius.circular(6), // Minimal rounded edges
-      elevation: 10,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onPressed,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: color, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Icon(icon, color: color, size: iconSize),
-        ),
-      ),
+    return ArcadeIconButton(
+      icon: icon,
+      color: color,
+      size: size,
+      iconSize: iconSize,
+      onPressed: onPressed,
     );
   }
 

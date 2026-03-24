@@ -1,63 +1,88 @@
-# Neon Games Flutter App
+# My Games
 
-## 📥 Getting the Project from GitHub
+A Flutter collection of classic and arcade games with a dark **neon** look: cyan and magenta accents, glow-style borders, and the **Orbitron** font.
 
-1. **Clone the repository:**
+## Requirements
+
+- [Flutter](https://docs.flutter.dev/get-started/install) (stable channel)
+- Dart SDK **^3.8.1** (as specified in `pubspec.yaml`)
+
+Check your setup:
+
+```bash
+flutter doctor
+```
+
+## Getting started
+
+1. **Clone** this repository (replace the URL with yours):
+
    ```bash
-   git clone https://github.com/yourusername/neon_games_flutter.git
-   cd neon_games_flutter
+   git clone https://github.com/<your-username>/my_games.git
+   cd my_games
    ```
+
 2. **Install dependencies:**
+
    ```bash
    flutter pub get
    ```
-3. **Run the app:**
+
+3. **Run** on a connected device or emulator:
+
    ```bash
    flutter run
    ```
 
-Welcome to **Neon Games** – a modern, multi-game Flutter app featuring a collection of classic and arcade games, all reimagined with a vibrant neon aesthetic!
+   Examples for specific targets:
 
-## 🎮 Included Games
+   ```bash
+   flutter run -d windows
+   flutter run -d chrome
+   ```
 
-- **Tic-Tac-Toe**  
-  Play against a friend with a glowing, animated board and clear win/draw detection.
+## Games
 
-- **Brick Breaker**  
-  Smash bricks with a neon paddle and ball, featuring smooth physics and high score tracking.
+| Game | Notes |
+|------|--------|
+| **Tic-Tac-Toe** | Two-player on one device; win/draw detection. |
+| **Brick Breaker** | Paddle and ball; **persistent high score** (`shared_preferences`). |
+| **Tetris** | Line clears and controls; **persistent high score**. |
+| **Snake** | Eat food, grow, avoid walls/self; **persistent high score**. |
+| **2048** | Merge tiles; **persistent high score**. |
+| **Flappy Bird** | Tap to fly through gaps; high score is **session only** (not saved after exit). |
+| **Space War** | Shoot enemies Space Invaders–style; score shown in-game. |
 
-- **Tetris**  
-  The classic falling-block puzzle game, with swipe/arrow controls, line clearing, and a glowing grid.
+## Features
 
-- **Snake**  
-  Guide a realistic, segmented neon snake to eat food and grow longer. Features smooth, floating movement and a lively look.
+- **Main menu** listing all games with neon-styled tiles.
+- **Best scores** saved across restarts for Brick Breaker, Tetris, Snake, and 2048.
+- **Cross-platform**: Android, iOS, Web, Windows, macOS, and Linux (standard Flutter targets).
+- **App icon & splash**: configured via `flutter_launcher_icons` and `flutter_native_splash` (see `pubspec.yaml`).
 
-- **2048**  
-  Slide and merge neon tiles to reach 2048! Includes smooth animations, swipe/arrow controls, and persistent high scores.
+## Project layout
 
-## ✨ Neon/Modern Styling
+- `lib/main.dart` — app theme and game launcher.
+- `lib/games/` — one Dart file per game.
 
-- **Vibrant Neon Colors:** Each game features a unique neon color palette for a modern, energetic look.
-- **Glowing Effects:** Boards, tiles, and game elements glow with layered shadows and gradients.
-- **Modern Fonts:** Uses the Orbitron font for a futuristic, arcade-inspired feel.
-- **Responsive UI:** All games scale to fit your device, with large, touch-friendly controls.
-- **Smooth Animations:** Transitions, movement, and effects are fluid and visually appealing.
+## Development
 
-## 🏆 Features
+```bash
+flutter analyze
+flutter test
+```
 
-- **Game Selection Menu:** Easily choose between games from a stylish main menu.
-- **High Score Tracking:** Brick Breaker, Tetris, Snake, and 2048 save your best scores using persistent storage.
-- **Mobile & Desktop Ready:** Fully playable on Android, iOS, web, Windows, macOS, and Linux.
-- **No Ads, No Paywalls:** 100% free and open source.
+Regenerate launcher icons or splash after changing `pubspec.yaml` assets/config:
 
-## 📸 Screenshots
+```bash
+dart run flutter_launcher_icons
+dart run flutter_native_splash:create
+```
 
-> Add your screenshots here to show off the neon UI and games!
+## Screenshots
 
-## 💡 About
+Add images here (for example `docs/screenshots/`) to show the menu and each game.
 
-This app is a showcase of classic games with a modern twist, built in Flutter for fun and learning. Contributions and suggestions are welcome!
+## Contributing
 
----
-
-Enjoy the glow! ✨
+Issues and pull requests are welcome. If you publish the repo publicly, consider adding a **LICENSE** file so others know how they may use the code.

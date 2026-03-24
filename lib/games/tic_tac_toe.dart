@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
+import '../widgets/arcade_button.dart';
+
 class TicTacToeGame extends StatefulWidget {
   const TicTacToeGame({super.key});
 
@@ -318,39 +320,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
   }
 
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 3),
-            color: Colors.white.withOpacity(0.08),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 22,
-              fontFamily: 'Orbitron',
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 8)],
-            ),
-          ),
-        ),
-      ),
-    );
+    return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
 
   Widget _buildBillboard(String winner) {

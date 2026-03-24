@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
 
+import '../widgets/arcade_button.dart';
+
 class FlappyBirdGame extends StatefulWidget {
   const FlappyBirdGame({super.key});
 
@@ -73,33 +75,47 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   void _tick() {
+    if (!isStarted || isGameOver) return;
+
+    final nextBirdVY = birdVY + gravity;
+    final nextBirdY = birdY + nextBirdVY;
+    final updatedPipes = <Pipe>[];
+    var nextScore = score;
+    var shouldEndGame = false;
+
+    for (final pipe in pipes) {
+      final updatedPipe = Pipe(pipe.x - 3, pipe.centerY)..passed = pipe.passed;
+      if (updatedPipe.x + pipeWidth < -screenWidth / 2) {
+        continue;
+      }
+
+      if (_collides(updatedPipe, nextBirdY)) {
+        shouldEndGame = true;
+      }
+
+      if (!updatedPipe.passed && updatedPipe.x + pipeWidth < 0) {
+        updatedPipe.passed = true;
+        nextScore++;
+      }
+
+      updatedPipes.add(updatedPipe);
+    }
+
+    if (nextBirdY + birdHeight / 2 > baseY ||
+        nextBirdY - birdHeight / 2 < -screenHeight / 2) {
+      shouldEndGame = true;
+    }
+
     setState(() {
-      birdVY += gravity;
-      birdY += birdVY;
-      // Move pipes
-      for (final pipe in pipes) {
-        pipe.x -= 3;
-      }
-      // Remove off-screen pipes
-      pipes.removeWhere((p) => p.x + pipeWidth < -screenWidth / 2);
-      // Collision
-      for (final pipe in pipes) {
-        if (_collides(pipe)) {
-          _endGame();
-          return;
-        }
-        // Score
-        if (!pipe.passed && pipe.x + pipeWidth < 0) {
-          pipe.passed = true;
-          score++;
-        }
-      }
-      // Ground or ceiling
-      if (birdY + birdHeight / 2 > baseY ||
-          birdY - birdHeight / 2 < -screenHeight / 2) {
-        _endGame();
-      }
+      birdVY = nextBirdVY;
+      birdY = nextBirdY;
+      pipes = updatedPipes;
+      score = nextScore;
     });
+
+    if (shouldEndGame) {
+      _endGame();
+    }
   }
 
   void _addPipe() {
@@ -112,10 +128,10 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
     pipes.add(Pipe(screenWidth / 2, centerY));
   }
 
-  bool _collides(Pipe pipe) {
+  bool _collides(Pipe pipe, double birdPositionY) {
     // Bird rect
     final birdRect = Rect.fromCenter(
-      center: Offset(0, birdY),
+      center: Offset(0, birdPositionY),
       width: birdWidth,
       height: birdHeight,
     );
@@ -415,39 +431,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 3),
-            color: Colors.white.withOpacity(0.08),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 22,
-              fontFamily: 'Orbitron',
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 8)],
-            ),
-          ),
-        ),
-      ),
-    );
+    return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
 }
 

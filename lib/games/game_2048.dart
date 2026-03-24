@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../widgets/arcade_button.dart';
+
 class Game2048 extends StatefulWidget {
   const Game2048({super.key});
 
@@ -18,6 +20,8 @@ class _Game2048State extends State<Game2048> {
   bool isGameOver = false;
   bool isGameWon = false;
   bool isMoving = false;
+  Offset? _dragStart;
+  Offset? _dragCurrent;
 
   @override
   void initState() {
@@ -45,9 +49,9 @@ class _Game2048State extends State<Game2048> {
       isGameOver = false;
       isGameWon = false;
       isMoving = false;
+      _addRandomTile();
+      _addRandomTile();
     });
-    _addRandomTile();
-    _addRandomTile();
   }
 
   void _addRandomTile() {
@@ -71,7 +75,6 @@ class _Game2048State extends State<Game2048> {
       gridSize,
       (_) => List.filled(gridSize, false),
     );
-    bool moved = false;
     for (int i = 0; i < gridSize; i++) {
       List<int> line = _getLine(i, dir);
       List<int> mergedLine = List.filled(gridSize, 0);
@@ -92,7 +95,6 @@ class _Game2048State extends State<Game2048> {
       _setLine(i, dir, mergedLine);
     }
     if (!_boardsEqual(oldBoard, board!)) {
-      moved = true;
       setState(() {
         score += gained;
         if (score > highScore) {
@@ -103,6 +105,10 @@ class _Game2048State extends State<Game2048> {
       await Future.delayed(const Duration(milliseconds: 120));
       setState(() {
         _addRandomTile();
+        isGameOver = _isGameOver();
+      });
+    } else {
+      setState(() {
         isGameOver = _isGameOver();
       });
     }
@@ -160,19 +166,20 @@ class _Game2048State extends State<Game2048> {
     return true;
   }
 
-  Offset? _dragStart;
-
   void _onPanStart(DragStartDetails details) {
     _dragStart = details.localPosition;
+    _dragCurrent = details.localPosition;
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    _dragCurrent = details.localPosition;
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_dragStart == null) return;
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final Offset dragEnd = box.globalToLocal(details.velocity.pixelsPerSecond);
-    final Offset delta = dragEnd - _dragStart!;
+    if (_dragStart == null || _dragCurrent == null) return;
+    final Offset delta = _dragCurrent! - _dragStart!;
     _dragStart = null;
+    _dragCurrent = null;
     if (delta.distance < 40) return; // Minimum swipe distance
     if (delta.dx.abs() > delta.dy.abs()) {
       if (delta.dx > 0) {
@@ -274,6 +281,7 @@ class _Game2048State extends State<Game2048> {
                         : constraints.maxHeight;
                     return GestureDetector(
                       onPanStart: _onPanStart,
+                      onPanUpdate: _onPanUpdate,
                       onPanEnd: _onPanEnd,
                       child: Container(
                         width: size,
@@ -402,39 +410,7 @@ class _Game2048State extends State<Game2048> {
   }
 
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onPressed,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color, width: 3),
-            color: Colors.white.withOpacity(0.08),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.4),
-                blurRadius: 18,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: Text(
-            text,
-            style: TextStyle(
-              fontSize: 22,
-              fontFamily: 'Orbitron',
-              color: color,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 2,
-              shadows: [Shadow(color: color.withOpacity(0.5), blurRadius: 8)],
-            ),
-          ),
-        ),
-      ),
-    );
+    return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
 }
 
