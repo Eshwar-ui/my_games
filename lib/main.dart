@@ -6,7 +6,11 @@ import 'games/tetris.dart';
 import 'games/snake.dart';
 import 'games/game_2048.dart';
 import 'games/flappy_bird.dart';
+import 'games/memory_match.dart';
 import 'games/space_war.dart';
+import 'games/neon_racer.dart';
+import 'screens/offline_settings_screen.dart';
+import 'screens/stats_dashboard_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -108,6 +112,20 @@ class GameSelectionScreen extends StatelessWidget {
         color: const Color(0xFF00FFF7),
         builder: (_) => const SpaceWarGame(),
       ),
+      _GameEntry(
+        title: 'Memory Match',
+        subtitle: 'Flip fast and clear the neon pairs.',
+        icon: Icons.psychology_alt,
+        color: const Color(0xFFFF6B6B),
+        builder: (_) => const MemoryMatchGame(),
+      ),
+      _GameEntry(
+        title: 'Neon Racer',
+        subtitle: 'High-speed traffic at night.',
+        icon: Icons.directions_car_filled,
+        color: const Color(0xFFFF073A),
+        builder: (_) => const NeonRacer(),
+      ),
     ];
 
     return Scaffold(
@@ -130,16 +148,48 @@ class GameSelectionScreen extends StatelessWidget {
               // ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-                  child: Center(
-                    child: Text(
-                      "RETRO GAMES",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF00FFF7),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                  child: Row(
+                    children: [
+                      _HeaderActionButton(
+                        icon: Icons.bar_chart_rounded,
+                        color: const Color(0xFFFF6B6B),
+                        tooltip: 'Stats',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const StatsDashboardScreen(),
+                            ),
+                          );
+                        },
                       ),
-                    ),
+                      const Expanded(
+                        child: Center(
+                          child: Text(
+                            'RETRO GAMES',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF00FFF7),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _HeaderActionButton(
+                        icon: Icons.tune,
+                        color: const Color(0xFF00FFF7),
+                        tooltip: 'Settings',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const OfflineSettingsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -148,25 +198,28 @@ class GameSelectionScreen extends StatelessWidget {
                 sliver: SliverLayoutBuilder(
                   builder: (context, constraints) {
                     final width = constraints.crossAxisExtent;
-                    final columns = width >= 980
-                        ? 3
-                        : width >= 640
-                        ? 2
-                        : 1;
-                    final cardHeight = columns == 1 ? 168.0 : 188.0;
+                    if (width <= 0) return const SliverToBoxAdapter();
+
+                    const columns = 2;
+                    final cardWidth = (width - 18) / columns;
+                    final cardHeight = cardWidth > 0 ? cardWidth : 200.0;
 
                     return SliverGrid(
                       delegate: SliverChildBuilderDelegate((context, index) {
-                        final game = games[index];
-                        return _GameCard(
-                          game: game,
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: game.builder),
-                            );
-                          },
-                        );
+                        try {
+                          final game = games[index];
+                          return _GameCard(
+                            game: game,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: game.builder),
+                              );
+                            },
+                          );
+                        } catch (e) {
+                          return const SizedBox.shrink();
+                        }
                       }, childCount: games.length),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
@@ -179,6 +232,44 @@ class GameSelectionScreen extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderActionButton extends StatelessWidget {
+  const _HeaderActionButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Ink(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFF201533),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: color.withOpacity(0.55), width: 1.8),
+            ),
+            child: Icon(icon, color: color),
           ),
         ),
       ),
@@ -386,7 +477,7 @@ class _GameCard extends StatelessWidget {
                 Text(
                   game.title,
                   style: TextStyle(
-                    fontSize: 24,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: game.color,
                     letterSpacing: 1.1,
@@ -399,14 +490,14 @@ class _GameCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  game.subtitle,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.45,
-                    color: Colors.white.withOpacity(0.74),
-                  ),
-                ),
+                // Text(
+                //   game.subtitle,
+                //   style: TextStyle(
+                //     fontSize: 14,
+                //     height: 1.45,
+                //     color: Colors.white.withOpacity(0.74),
+                //   ),
+                // ),
               ],
             ),
           ),

@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
-import 'dart:async';
+import 'dart:async' as async;
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flame/components.dart';
+import 'package:flame/flame.dart';
+import 'package:flame/sprite.dart';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class BrickBreakerGame extends StatefulWidget {
   const BrickBreakerGame({super.key});
@@ -20,6 +27,9 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   static const double paddleWidth = 80;
   static const double paddleHeight = 16;
   static const double ballRadius = 10;
+  static const String _atlasAsset = 'brick_breaker/sprite_sheet.png';
+
+  late final Future<_BrickSpriteAtlas> _atlasFuture;
 
   double paddleX = 0;
   double ballX = 0;
@@ -29,14 +39,157 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   List<List<bool>> bricks = [];
   bool isPlaying = false;
   bool isGameOver = false;
-  Timer? gameTimer;
+  async.Timer? gameTimer;
   Size? lastSize;
   int highScore = 0;
 
   @override
   void initState() {
     super.initState();
+    GameHaptics.preload();
+    // So Flame can load `assets/<path>` correctly.
+    Flame.images.prefix = 'assets/';
+    _atlasFuture = _loadAtlas();
     _loadHighScore();
+  }
+
+  Future<_BrickSpriteAtlas> _loadAtlas() async {
+    final image = await Flame.images.load(_atlasAsset);
+
+    // Crop by detecting alpha coverage columns, so it works even if the sheet
+    // isn't perfectly evenly spaced.
+    final spriteRects = await _detectSpriteRects(image);
+    spriteRects.sort((a, b) => a.left.compareTo(b.left));
+
+    Sprite spriteFromRect(Rect rect) {
+      return Sprite(
+        image,
+        srcPosition: Vector2(rect.left, rect.top),
+        srcSize: Vector2(rect.width, rect.height),
+      );
+    }
+
+    if (spriteRects.length < 3) {
+      throw StateError(
+        'brick_breaker sprite sheet detection failed: expected >=3 sprites, got ${spriteRects.length}',
+      );
+    }
+
+    final paddle = spriteFromRect(spriteRects[0]);
+    final ball = spriteFromRect(spriteRects[1]);
+
+    final brickVariantRects = spriteRects.sublist(2);
+    final brickVariants = brickVariantRects.map(spriteFromRect).toList();
+    return _BrickSpriteAtlas(
+      paddle: paddle,
+      ball: ball,
+      brickVariants: brickVariants.isEmpty ? [paddle] : brickVariants,
+    );
+  }
+
+  Future<List<Rect>> _detectSpriteRects(ui.Image image) async {
+    const alphaThreshold = 10; // ignore very faint glow speckles
+    const minSpriteWidth = 25;
+    const gapMergeColumns = 3; // merge runs separated by tiny transparent gaps
+    const padding = 2; // add a little padding so glow isn't clipped
+
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    if (byteData == null) return [];
+    final bytes = byteData.buffer.asUint8List();
+
+    final width = image.width;
+    final height = image.height;
+
+    bool alphaAt(int x, int y) {
+      final idx = (y * width + x) * 4 + 3;
+      return bytes[idx] > alphaThreshold;
+    }
+
+    // Step 1: detect columns that have any visible pixels.
+    final columnHas = List<bool>.filled(width, false);
+    for (int x = 0; x < width; x++) {
+      bool any = false;
+      for (int y = 0; y < height; y++) {
+        if (alphaAt(x, y)) {
+          any = true;
+          break;
+        }
+      }
+      columnHas[x] = any;
+    }
+
+    // Step 2: convert column runs into initial segments.
+    final segments = <({int left, int right})>[];
+    int? start;
+    for (int x = 0; x < width; x++) {
+      if (columnHas[x]) {
+        start ??= x;
+      } else if (start != null) {
+        segments.add((left: start, right: x - 1));
+        start = null;
+      }
+    }
+    if (start != null) segments.add((left: start, right: width - 1));
+
+    // Step 3: filter tiny runs and merge near-by runs (anti-aliasing gaps).
+    final filtered = segments
+        .where((s) => s.right - s.left + 1 >= minSpriteWidth)
+        .toList();
+
+    final merged = <({int left, int right})>[];
+    for (final seg in filtered) {
+      if (merged.isEmpty) {
+        merged.add(seg);
+        continue;
+      }
+      final last = merged.removeLast();
+      final gap = seg.left - last.right - 1;
+      if (gap <= gapMergeColumns) {
+        merged.add((left: last.left, right: seg.right));
+      } else {
+        merged.add(last);
+        merged.add(seg);
+      }
+    }
+
+    // Step 4: compute y bounds for each merged x-run.
+    final rects = <Rect>[];
+    for (final seg in merged) {
+      int top = height;
+      int bottom = -1;
+
+      for (int y = 0; y < height; y++) {
+        bool any = false;
+        for (int x = seg.left; x <= seg.right; x++) {
+          if (alphaAt(x, y)) {
+            any = true;
+            break;
+          }
+        }
+        if (any) {
+          top = min(top, y);
+          bottom = max(bottom, y);
+        }
+      }
+
+      if (bottom < 0) continue;
+
+      final left = (seg.left - padding).clamp(0, width - 1);
+      final right = (seg.right + padding).clamp(0, width - 1);
+      final t = (top - padding).clamp(0, height - 1);
+      final b = (bottom + padding).clamp(0, height - 1);
+
+      rects.add(
+        Rect.fromLTRB(
+          left.toDouble(),
+          t.toDouble(),
+          (right + 1).toDouble(),
+          (b + 1).toDouble(),
+        ),
+      );
+    }
+
+    return rects;
   }
 
   Future<void> _loadHighScore() async {
@@ -61,7 +214,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
     isPlaying = true;
     isGameOver = false;
     gameTimer?.cancel();
-    gameTimer = Timer.periodic(
+    gameTimer = async.Timer.periodic(
       const Duration(milliseconds: 12),
       (_) => _updateGame(width, height),
     );
@@ -78,6 +231,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   }
 
   void _startGame(double width, double height) {
+    ArcadeStatsService.recordPlay('brick_breaker');
     setState(() {
       _initializeGameState(width, height);
     });
@@ -112,6 +266,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
         double hitPos = (ballX - paddleX - paddleWidth / 2) / (paddleWidth / 2);
         ballVX += hitPos;
         ballVX = ballVX.clamp(-6, 6);
+        GameHaptics.light();
       }
 
       for (int row = 0; row < rowCount; row++) {
@@ -139,6 +294,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
               highScore = score;
               shouldSaveHighScore = true;
             }
+            GameHaptics.medium();
             if (bricks.every((row) => row.every((b) => !b))) {
               // All bricks cleared: generate new random layer and increase difficulty
               final rand = Random();
@@ -167,6 +323,12 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
         isPlaying = false;
         isGameOver = true;
         gameTimer?.cancel();
+        ArcadeStatsService.recordResult(
+          'brick_breaker',
+          score: _calculateScore(),
+          won: false,
+        );
+        GameHaptics.heavy();
       }
     });
     if (shouldSaveHighScore) {
@@ -190,7 +352,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   @override
   Widget build(BuildContext context) {
     final neonBlue = const Color(0xFF00FFF7);
-    final neonOrange = const Color(0xFFFFA500);
     final neonGreen = const Color(0xFF39FF14);
     final neonRed = const Color(0xFFFF073A);
     return Scaffold(
@@ -207,6 +368,16 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
           ),
         ),
         actions: [
+          const GameHelpAction(
+            title: 'Brick Breaker',
+            accent: Color(0xFFFFA500),
+            steps: [
+              'Drag left and right to move the paddle.',
+              'Bounce the ball to break every brick you can reach.',
+              'Do not let the ball drop below the paddle.',
+            ],
+            tip: 'Use the paddle edges to change the bounce angle and recover control.',
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(
@@ -226,6 +397,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
           IconButton(
             icon: Icon(Icons.refresh, color: neonGreen),
             onPressed: () {
+              GameHaptics.tap();
               final size = lastSize ?? MediaQuery.sizeOf(context);
               _startGame(size.width, size.height);
             },
@@ -233,137 +405,125 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = constraints.maxWidth;
-            final height = constraints.maxHeight;
-            double paddleTop = height - paddleHeight - 20;
-            if (bricks.isEmpty ||
-                lastSize == null ||
-                lastSize!.width != width ||
-                lastSize!.height != height) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    lastSize = Size(width, height);
-                    _initializeGameState(width, height);
+      body: FutureBuilder<_BrickSpriteAtlas>(
+        future: _atlasFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError || !snapshot.hasData) {
+            return const Center(child: Text('Failed to load sprites'));
+          }
+          final atlas = snapshot.data!;
+
+          return SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final height = constraints.maxHeight;
+                double paddleTop = height - paddleHeight - 20;
+                if (bricks.isEmpty ||
+                    lastSize == null ||
+                    lastSize!.width != width ||
+                    lastSize!.height != height) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      setState(() {
+                        lastSize = Size(width, height);
+                        _initializeGameState(width, height);
+                      });
+                    }
                   });
+                  return const Center(child: CircularProgressIndicator());
                 }
-              });
-              return const Scaffold(
-                backgroundColor: Color(0xFF18122B),
-                body: Center(child: CircularProgressIndicator()),
-              );
-            }
-            int score = _calculateScore();
-            return GestureDetector(
-              onHorizontalDragUpdate: (details) {
-                if (isPlaying) {
-                  _movePaddleTo(details.localPosition.dx, width);
-                }
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Stack(
-                children: [
-                  ..._buildBricks(width, neonOrange),
-                  Positioned(
-                    left: paddleX,
-                    top: paddleTop,
-                    child: Container(
-                      width: paddleWidth,
-                      height: paddleHeight,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: neonBlue, width: 3),
-                        boxShadow: [
-                          BoxShadow(
-                            color: neonBlue.withOpacity(0.5),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: ballX - ballRadius,
-                    top: ballY - ballRadius,
-                    child: Container(
-                      width: ballRadius * 2,
-                      height: ballRadius * 2,
-                      decoration: BoxDecoration(
-                        color: neonRed,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: neonRed.withOpacity(0.5),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-                  if (isGameOver)
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 24,
+
+                return GestureDetector(
+                  onHorizontalDragUpdate: (details) {
+                    if (isPlaying) {
+                      _movePaddleTo(details.localPosition.dx, width);
+                    }
+                  },
+                  behavior: HitTestBehavior.translucent,
+                  child: Stack(
+                    children: [
+                      ..._buildBricks(width, atlas),
+                      Positioned(
+                        left: paddleX,
+                        top: paddleTop,
+                        child: _spriteBox(
+                          sprite: atlas.paddle,
+                          width: paddleWidth,
+                          height: paddleHeight,
                         ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: neonBlue, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonBlue.withOpacity(0.4),
-                              blurRadius: 18,
+                      ),
+                      Positioned(
+                        left: ballX - ballRadius,
+                        top: ballY - ballRadius,
+                        child: _spriteBox(
+                          sprite: atlas.ball,
+                          width: ballRadius * 2,
+                          height: ballRadius * 2,
+                        ),
+                      ),
+                      if (isGameOver)
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 32,
+                              vertical: 24,
                             ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'Game Over',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontFamily: 'Orbitron',
-                                color: neonRed,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2,
-                                shadows: [
-                                  Shadow(
-                                    color: neonRed.withOpacity(0.5),
-                                    blurRadius: 8,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: neonBlue, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: neonBlue.withOpacity(0.4),
+                                  blurRadius: 18,
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Game Over',
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontFamily: 'Orbitron',
+                                    color: neonRed,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2,
+                                    shadows: [
+                                      Shadow(
+                                        color: neonRed.withOpacity(0.5),
+                                        blurRadius: 8,
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                ),
+                                const SizedBox(height: 16),
+                                _neonButton(
+                                  'Restart',
+                                  () => _startGame(width, height),
+                                  neonRed,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 16),
-                            _neonButton(
-                              'Restart',
-                              () => _startGame(width, height),
-                              neonRed,
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
   }
 
-  List<Widget> _buildBricks(double width, Color neonOrange) {
+  List<Widget> _buildBricks(double width, _BrickSpriteAtlas atlas) {
     List<Widget> widgets = [];
     double brickWidth = (width - (colCount + 1) * brickGap) / colCount;
     for (int row = 0; row < rowCount; row++) {
@@ -371,25 +531,15 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
         if (!bricks[row][col]) continue;
         double left = col * (brickWidth + brickGap) + brickGap;
         double top = row * (brickHeight + brickGap) + brickGap + 20;
+        final brickSprite = atlas.brickForRow(row);
         widgets.add(
           Positioned(
             left: left,
             top: top,
-            child: Container(
+            child: _spriteBox(
+              sprite: brickSprite,
               width: brickWidth,
               height: brickHeight,
-              decoration: BoxDecoration(
-                color: neonOrange.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: neonOrange.withOpacity(0.5),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
             ),
           ),
         );
@@ -400,5 +550,60 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
 
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
     return ArcadeButton(label: text, color: color, onPressed: onPressed);
+  }
+}
+
+class _BrickSpriteAtlas {
+  const _BrickSpriteAtlas({
+    required this.paddle,
+    required this.ball,
+    required this.brickVariants,
+  });
+
+  final Sprite paddle;
+  final Sprite ball;
+  final List<Sprite> brickVariants;
+
+  Sprite brickForRow(int row) => brickVariants[row % brickVariants.length];
+}
+
+Widget _spriteBox({
+  required Sprite sprite,
+  required double width,
+  required double height,
+}) {
+  return SizedBox(
+    width: width,
+    height: height,
+    child: CustomPaint(
+      painter: _SpritePainter(sprite),
+      size: Size(width, height),
+    ),
+  );
+}
+
+class _SpritePainter extends CustomPainter {
+  const _SpritePainter(this.sprite);
+
+  final Sprite sprite;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final src = Rect.fromLTWH(
+      sprite.srcPosition.x,
+      sprite.srcPosition.y,
+      sprite.srcSize.x,
+      sprite.srcSize.y,
+    );
+    final dst = Offset.zero & size;
+    final paint = Paint()..filterQuality = FilterQuality.high;
+    canvas.drawImageRect(sprite.image, src, dst, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpritePainter oldDelegate) {
+    return oldDelegate.sprite.image != sprite.image ||
+        oldDelegate.sprite.srcPosition != sprite.srcPosition ||
+        oldDelegate.sprite.srcSize != sprite.srcSize;
   }
 }

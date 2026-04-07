@@ -3,7 +3,10 @@ import 'dart:async';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class SnakeGame extends StatefulWidget {
   const SnakeGame({super.key});
@@ -34,6 +37,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    GameHaptics.preload();
     _loadHighScore();
     _floatController = AnimationController(
       vsync: this,
@@ -54,6 +58,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   }
 
   void _startGame() {
+    ArcadeStatsService.recordPlay('snake');
     final initialSnake = [const Point(10, 10)];
     setState(() {
       snake = initialSnake;
@@ -69,11 +74,13 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   }
 
   void _endGame() {
+    ArcadeStatsService.recordResult('snake', score: score, won: false);
     setState(() {
       isGameOver = true;
       isStarted = false;
     });
     timer?.cancel();
+    GameHaptics.heavy();
     if (score > highScore) {
       setState(() {
         highScore = score;
@@ -140,6 +147,9 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
         food = nextFoodPosition!;
       }
     });
+    if (growing) {
+      GameHaptics.medium();
+    }
   }
 
   bool _isCollision(Point<int> p, bool growing) {
@@ -170,6 +180,11 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
 
   void _onPanEnd(DragEndDetails details) {
     if (_dragStart == null || _dragUpdate == null) return;
+    if (!isStarted || isGameOver) {
+      _dragStart = null;
+      _dragUpdate = null;
+      return;
+    }
     final Offset delta = _dragUpdate! - _dragStart!;
     _dragStart = null;
     _dragUpdate = null;
@@ -187,6 +202,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
         nextDirection = Direction.up;
       }
     }
+    GameHaptics.tap();
   }
 
   @override
@@ -216,6 +232,16 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
           ),
         ),
         actions: [
+          const GameHelpAction(
+            title: 'Snake',
+            accent: Color(0xFF39FF14),
+            steps: [
+              'Swipe or use the arrows to guide the snake.',
+              'Eat stars to grow longer and raise your score.',
+              'Do not crash into your own body.',
+            ],
+            tip: 'Plan two turns ahead once the snake gets long.',
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class Game2048 extends StatefulWidget {
   const Game2048({super.key});
@@ -26,6 +29,7 @@ class _Game2048State extends State<Game2048> {
   @override
   void initState() {
     super.initState();
+    GameHaptics.preload();
     _loadHighScore();
     _startGame();
   }
@@ -43,6 +47,7 @@ class _Game2048State extends State<Game2048> {
   }
 
   void _startGame() {
+    ArcadeStatsService.recordPlay('game_2048');
     setState(() {
       board = List.generate(gridSize, (_) => List.filled(gridSize, 0));
       score = 0;
@@ -71,6 +76,7 @@ class _Game2048State extends State<Game2048> {
     setState(() => isMoving = true);
     final oldBoard = board!.map((row) => [...row]).toList();
     int gained = 0;
+    var wonThisTurn = false;
     List<List<bool>> merged = List.generate(
       gridSize,
       (_) => List.filled(gridSize, false),
@@ -86,7 +92,10 @@ class _Game2048State extends State<Game2048> {
           mergedLine[last] *= 2;
           gained += mergedLine[last];
           merged[i][last] = true;
-          if (mergedLine[last] == 2048) isGameWon = true;
+          if (mergedLine[last] == 2048) {
+            isGameWon = true;
+            wonThisTurn = true;
+          }
         } else {
           last = pos;
           mergedLine[pos++] = line[j];
@@ -94,7 +103,8 @@ class _Game2048State extends State<Game2048> {
       }
       _setLine(i, dir, mergedLine);
     }
-    if (!_boardsEqual(oldBoard, board!)) {
+    final didMove = !_boardsEqual(oldBoard, board!);
+    if (didMove) {
       setState(() {
         score += gained;
         if (score > highScore) {
@@ -102,15 +112,31 @@ class _Game2048State extends State<Game2048> {
           _saveHighScore();
         }
       });
+      if (wonThisTurn) {
+        ArcadeStatsService.recordResult('game_2048', score: score, won: true);
+        GameHaptics.heavy();
+      } else if (gained > 0) {
+        GameHaptics.medium();
+      } else {
+        GameHaptics.tap();
+      }
       await Future.delayed(const Duration(milliseconds: 120));
       setState(() {
         _addRandomTile();
         isGameOver = _isGameOver();
       });
+      if (isGameOver && !wonThisTurn) {
+        ArcadeStatsService.recordResult('game_2048', score: score, won: false);
+        GameHaptics.heavy();
+      }
     } else {
       setState(() {
         isGameOver = _isGameOver();
       });
+      if (isGameOver) {
+        ArcadeStatsService.recordResult('game_2048', score: score, won: false);
+        GameHaptics.heavy();
+      }
     }
     setState(() => isMoving = false);
   }
@@ -226,6 +252,16 @@ class _Game2048State extends State<Game2048> {
           ),
         ),
         actions: [
+          const GameHelpAction(
+            title: '2048',
+            accent: Color(0xFFFF00FF),
+            steps: [
+              'Swipe to shift all tiles in one direction.',
+              'Matching numbers merge into a larger tile.',
+              'Reach 2048 before the board fills up.',
+            ],
+            tip: 'Keep your largest tile parked in one corner and build around it.',
+          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class TicTacToeGame extends StatefulWidget {
   const TicTacToeGame({super.key});
@@ -31,6 +34,8 @@ class _TicTacToeGameState extends State<TicTacToeGame>
   @override
   void initState() {
     super.initState();
+    GameHaptics.preload();
+    ArcadeStatsService.recordPlay('tic_tac_toe');
     debugPrint('TicTacToeGameState: initState, using TickerProviderStateMixin');
     _billboardController = AnimationController(
       vsync: this,
@@ -56,6 +61,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
   }
 
   void _resetGame() {
+    ArcadeStatsService.recordPlay('tic_tac_toe');
     setState(() {
       _board = List.generate(gridSize, (_) => List.filled(gridSize, null));
       _currentPlayer = 'X';
@@ -71,17 +77,30 @@ class _TicTacToeGameState extends State<TicTacToeGame>
 
   void _handleTap(int row, int col) {
     if (_board[row][col] != null || _winner != null) return;
+    var didWin = false;
+    var didDraw = false;
     setState(() {
       _board[row][col] = _currentPlayer;
       if (_checkWinnerAndMark(row, col)) {
         _winner = _currentPlayer;
+        didWin = true;
         _billboardController.forward(from: 0);
       } else if (_isBoardFull()) {
         _isDraw = true;
+        didDraw = true;
       } else {
         _currentPlayer = _currentPlayer == 'X' ? 'O' : 'X';
       }
     });
+    if (didWin) {
+      ArcadeStatsService.recordResult('tic_tac_toe', score: 1, won: true);
+      GameHaptics.heavy();
+    } else if (didDraw) {
+      ArcadeStatsService.recordResult('tic_tac_toe', score: 0, won: false);
+      GameHaptics.medium();
+    } else {
+      GameHaptics.tap();
+    }
   }
 
   bool _isBoardFull() {
@@ -154,9 +173,22 @@ class _TicTacToeGameState extends State<TicTacToeGame>
           ),
         ),
         actions: [
+          const GameHelpAction(
+            title: 'Tic-Tac-Toe',
+            accent: Color(0xFF00FFF7),
+            steps: [
+              'Tap an empty square to place your mark.',
+              'Connect three in a row horizontally, vertically, or diagonally.',
+              'Use restart to begin a fresh local match on the same device.',
+            ],
+            tip: 'Open from the center when you can. It gives the most winning lines.',
+          ),
           IconButton(
             icon: Icon(Icons.refresh, color: neonGreen),
-            onPressed: _resetGame,
+            onPressed: () {
+              GameHaptics.tap();
+              _resetGame();
+            },
             tooltip: 'Restart Game',
           ),
         ],

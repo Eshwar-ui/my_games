@@ -3,7 +3,10 @@ import 'dart:async';
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class TetrisGame extends StatefulWidget {
   const TetrisGame({super.key});
@@ -109,6 +112,7 @@ class _TetrisGameState extends State<TetrisGame> {
   @override
   void initState() {
     super.initState();
+    GameHaptics.preload();
     _loadHighScore();
     // Do not start the game immediately
     isStarted = false;
@@ -127,6 +131,7 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   void _startGame() {
+    ArcadeStatsService.recordPlay('tetris');
     setState(() {
       grid = List.generate(rowCount, (_) => List.filled(colCount, null));
       isGameOver = false;
@@ -156,6 +161,7 @@ class _TetrisGameState extends State<TetrisGame> {
 
     if (hasCollision) {
       timer?.cancel();
+      ArcadeStatsService.recordResult('tetris', score: score, won: false);
       setState(() {
         current = spawned;
         next = upcoming;
@@ -165,6 +171,7 @@ class _TetrisGameState extends State<TetrisGame> {
           highScore = score;
         }
       });
+      GameHaptics.heavy();
       if (shouldSaveHighScore) {
         _saveHighScore();
       }
@@ -220,6 +227,7 @@ class _TetrisGameState extends State<TetrisGame> {
     }
     if (lines > 0) {
       score += lines * 100;
+      GameHaptics.medium();
       if (score > highScore) {
         setState(() {
           highScore = score;
@@ -298,9 +306,22 @@ class _TetrisGameState extends State<TetrisGame> {
           ),
         ),
         actions: [
+          const GameHelpAction(
+            title: 'Tetris',
+            accent: Color(0xFF00FFF7),
+            steps: [
+              'Move pieces left and right to fit each shape.',
+              'Rotate before the stack gets too tall.',
+              'Clear full rows to score and keep the board alive.',
+            ],
+            tip: 'Flatten the stack first. Tetris scoring comes later.',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF39FF14)),
-            onPressed: _startGame,
+            onPressed: () {
+              GameHaptics.tap();
+              _startGame();
+            },
             tooltip: 'Restart',
           ),
         ],
@@ -415,47 +436,61 @@ class _TetrisGameState extends State<TetrisGame> {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
+                    horizontal: 12,
                     vertical: 8,
                   ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _funkyButton(
-                          Icons.arrow_left,
-                          () => _move(-1),
-                          const Color(0xFF1E90FF),
-                          size: 80,
-                          iconSize: 44,
-                        ),
-                        const SizedBox(width: 18),
-                        _funkyButton(
-                          Icons.rotate_right,
-                          _rotate,
-                          const Color(0xFFFF00FF),
-                          size: 80,
-                          iconSize: 44,
-                        ),
-                        const SizedBox(width: 18),
-                        _funkyButton(
-                          Icons.arrow_right,
-                          () => _move(1),
-                          const Color(0xFFFFA500),
-                          size: 80,
-                          iconSize: 44,
-                        ),
-                        const SizedBox(width: 18),
-                        _funkyButton(
-                          Icons.arrow_downward,
-                          _drop,
-                          const Color(0xFF39FF14),
-                          size: 80,
-                          iconSize: 44,
-                        ),
-                      ],
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      const spacing = 14.0;
+                      final buttonSize = ((constraints.maxWidth -
+                                      (spacing * 3)) /
+                                  4)
+                              .clamp(56.0, 80.0)
+                          as double;
+                      final iconSize = (buttonSize * 0.55).clamp(28.0, 44.0)
+                          as double;
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _funkyButton(
+                            Icons.arrow_left,
+                            () => _move(-1),
+                            const Color(0xFF1E90FF),
+                            size: buttonSize,
+                            iconSize: iconSize,
+                            hitSize: buttonSize,
+                          ),
+                          const SizedBox(width: spacing),
+                          _funkyButton(
+                            Icons.rotate_right,
+                            _rotate,
+                            const Color(0xFFFF00FF),
+                            size: buttonSize,
+                            iconSize: iconSize,
+                            hitSize: buttonSize,
+                          ),
+                          const SizedBox(width: spacing),
+                          _funkyButton(
+                            Icons.arrow_right,
+                            () => _move(1),
+                            const Color(0xFFFFA500),
+                            size: buttonSize,
+                            iconSize: iconSize,
+                            hitSize: buttonSize,
+                          ),
+                          const SizedBox(width: spacing),
+                          _funkyButton(
+                            Icons.arrow_downward,
+                            _drop,
+                            const Color(0xFF39FF14),
+                            size: buttonSize,
+                            iconSize: iconSize,
+                            hitSize: buttonSize,
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -484,12 +519,14 @@ class _TetrisGameState extends State<TetrisGame> {
     Color color, {
     double size = 64,
     double iconSize = 36,
+    double? hitSize,
   }) {
     return ArcadeIconButton(
       icon: icon,
       color: color,
       size: size,
       iconSize: iconSize,
+      hitSize: hitSize ?? size,
       onPressed: onPressed,
     );
   }

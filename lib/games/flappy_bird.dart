@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class FlappyBirdGame extends StatefulWidget {
   const FlappyBirdGame({super.key});
@@ -12,6 +16,7 @@ class FlappyBirdGame extends StatefulWidget {
 }
 
 class _FlappyBirdGameState extends State<FlappyBirdGame> {
+  static const String _highScoreKey = 'flappy_bird_high_score';
   static const double gravity = 0.6;
   static const double flapPower = -9.5;
   static const double birdWidth = 48;
@@ -36,10 +41,26 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   @override
   void initState() {
     super.initState();
-    // No auto start
+    GameHaptics.preload();
+    _loadHighScore();
+  }
+
+  Future<void> _loadHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+
+    setState(() {
+      highScore = prefs.getInt(_highScoreKey) ?? 0;
+    });
+  }
+
+  Future<void> _saveHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_highScoreKey, highScore);
   }
 
   void _startGame() {
+    ArcadeStatsService.recordPlay('flappy_bird');
     setState(() {
       birdY = 0;
       birdVY = 0;
@@ -61,22 +82,27 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   void _endGame() {
+    final shouldPersistHighScore = score > highScore;
+    ArcadeStatsService.recordResult('flappy_bird', score: score, won: false);
     setState(() {
       isGameOver = true;
       isStarted = false;
+      if (shouldPersistHighScore) {
+        highScore = score;
+      }
     });
     gameTimer?.cancel();
     pipeTimer?.cancel();
-    if (score > highScore) {
-      setState(() {
-        highScore = score;
-      });
+    GameHaptics.heavy();
+    if (shouldPersistHighScore) {
+      _saveHighScore();
     }
   }
 
   void _tick() {
     if (!isStarted || isGameOver) return;
 
+    final previousScore = score;
     final nextBirdVY = birdVY + gravity;
     final nextBirdY = birdY + nextBirdVY;
     final updatedPipes = <Pipe>[];
@@ -112,6 +138,9 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
       pipes = updatedPipes;
       score = nextScore;
     });
+    if (nextScore > previousScore) {
+      GameHaptics.light();
+    }
 
     if (shouldEndGame) {
       _endGame();
@@ -155,12 +184,14 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   void _flap() {
     if (!isStarted) {
       _startGame();
+      GameHaptics.tap();
       return;
     }
     if (isGameOver) return;
     setState(() {
       birdVY = flapPower;
     });
+    GameHaptics.tap();
   }
 
   @override
@@ -196,6 +227,16 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
               ),
             ),
             actions: [
+              const GameHelpAction(
+                title: 'Flappy Bird',
+                accent: Color(0xFFFFFF00),
+                steps: [
+                  'Tap anywhere to flap upward.',
+                  'Pass cleanly through pipe gaps to score points.',
+                  'Avoid pipes, the ceiling, and the floor.',
+                ],
+                tip: 'Short rhythmic taps are steadier than panic flapping.',
+              ),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,

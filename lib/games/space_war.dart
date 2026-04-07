@@ -7,7 +7,10 @@ import 'package:flame/sprite.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../widgets/arcade_button.dart';
+import '../services/arcade_stats_service.dart';
+import '../services/game_haptics.dart';
+import '../services/game_help.dart';
+import '../services/haptic_arcade_button.dart';
 
 class SpaceWarGame extends StatefulWidget {
   const SpaceWarGame({super.key});
@@ -58,6 +61,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   @override
   void initState() {
     super.initState();
+    GameHaptics.preload();
     // Flame's default image prefix is `assets/images/`, but this project stores
     // sprites under `assets/space_war/...`. Align the prefix so the loader can
     // find the sprite sheet.
@@ -104,6 +108,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _startGame() {
+    ArcadeStatsService.recordPlay('space_war');
     setState(() {
       playerX = 0;
       enemies = [];
@@ -226,6 +231,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
           bullet.hit = true;
           enemy.hit = true;
           nextScore += 10 + wave * 2;
+          GameHaptics.medium();
           updatedBursts.add(
             ExplosionBurst(
               x: enemy.x + enemy.size / 2,
@@ -324,6 +330,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _startNextWave() {
+    GameHaptics.medium();
     setState(() {
       _configureWave(wave + 1);
     });
@@ -331,6 +338,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
 
   void _endGame() {
     final shouldPersistHighScore = score >= highScore && highScore > 0;
+    ArcadeStatsService.recordResult('space_war', score: score, won: false);
     setState(() {
       isGameOver = true;
       isStarted = false;
@@ -338,6 +346,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
     gameTimer?.cancel();
     _stopMoveRepeat();
     _stopShootRepeat();
+    GameHaptics.heavy();
     if (shouldPersistHighScore) {
       _saveHighScore();
     }
@@ -453,6 +462,16 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                   ),
                 ),
                 actions: [
+                  const GameHelpAction(
+                    title: 'Space War',
+                    accent: Color(0xFF00FFF7),
+                    steps: [
+                      'Hold the left and right buttons to dodge incoming ships.',
+                      'Hold the center fire button to spray shots upward.',
+                      'Clear waves and avoid enemy bullets reaching your ship.',
+                    ],
+                    tip: 'Short lateral corrections are safer than huge swings across the screen.',
+                  ),
                   Padding(
                     padding: const EdgeInsets.only(right: 16),
                     child: Center(
