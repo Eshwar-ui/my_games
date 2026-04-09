@@ -7,6 +7,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class SnakeGame extends StatefulWidget {
   const SnakeGame({super.key});
@@ -30,6 +31,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   int score = 0;
   int highScore = 0;
   bool isStarted = false;
+  bool isPaused = false;
   Direction? nextDirection;
 
   AnimationController? _floatController;
@@ -68,6 +70,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
       isGameOver = false;
       score = 0;
       isStarted = true;
+      isPaused = false;
     });
     timer?.cancel();
     timer = Timer.periodic(tickDuration, (_) => _tick());
@@ -100,13 +103,13 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   }
 
   void _tick() {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
 
     final pendingDirection = nextDirection;
     final nextDir =
         pendingDirection != null && !_isOpposite(pendingDirection, direction)
-        ? pendingDirection
-        : direction;
+            ? pendingDirection
+            : direction;
     final head = snake.first;
     late final Point<int> newHead;
     switch (nextDir) {
@@ -166,43 +169,48 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
         (a == Direction.right && b == Direction.left);
   }
 
-  Offset? _dragStart;
-  Offset? _dragUpdate;
+  Offset _dragDelta = Offset.zero;
 
   void _onPanStart(DragStartDetails details) {
-    _dragStart = details.localPosition;
-    _dragUpdate = details.localPosition;
+    _dragDelta = Offset.zero;
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
-    _dragUpdate = details.localPosition;
+    if (isGameOver || !isStarted || isPaused) return;
+    _dragDelta += details.delta;
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_dragStart == null || _dragUpdate == null) return;
-    if (!isStarted || isGameOver) {
-      _dragStart = null;
-      _dragUpdate = null;
-      return;
-    }
-    final Offset delta = _dragUpdate! - _dragStart!;
-    _dragStart = null;
-    _dragUpdate = null;
-    if (delta.distance < 40) return; // Minimum swipe distance
-    if (delta.dx.abs() > delta.dy.abs()) {
-      if (delta.dx > 0) {
-        nextDirection = Direction.right;
-      } else {
-        nextDirection = Direction.left;
-      }
+    if (isGameOver || !isStarted || isPaused) return;
+    if (_dragDelta.distance < 10) return;
+
+    Direction? newDir;
+    if (_dragDelta.dx.abs() > _dragDelta.dy.abs()) {
+      newDir = _dragDelta.dx > 0 ? Direction.right : Direction.left;
     } else {
-      if (delta.dy > 0) {
-        nextDirection = Direction.down;
-      } else {
-        nextDirection = Direction.up;
-      }
+      newDir = _dragDelta.dy > 0 ? Direction.down : Direction.up;
     }
+
+    if (!_isOpposite(newDir, direction)) {
+      nextDirection = newDir;
+    }
+    _dragDelta = Offset.zero;
     GameHaptics.tap();
+  }
+
+  void _togglePause() {
+    if (!isStarted || isGameOver) return;
+    setState(() {
+      isPaused = !isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
   }
 
   @override
@@ -258,133 +266,152 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
               ),
             ),
           ),
+          if (isStarted && !isGameOver)
+            IconButton(
+              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+              color: neonGreen,
+              onPressed: _togglePause,
+            ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            Card(
-              color: Colors.white.withOpacity(0.1),
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Text(
-                  'Score: $score',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Orbitron',
-                    color: Color(0xFF39FF14),
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: neonGreen.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      'Score: $score',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontFamily: 'Orbitron',
+                        color: Color(0xFF39FF14),
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Center(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size = constraints.maxWidth < constraints.maxHeight
-                        ? constraints.maxWidth
-                        : constraints.maxHeight;
-                    return GestureDetector(
-                      onPanStart: _onPanStart,
-                      onPanUpdate: _onPanUpdate,
-                      onPanEnd: _onPanEnd,
-                      child: SizedBox(
-                        width: size,
-                        height: size,
-                        child: _buildGrid(
-                          neonGreen,
-                          neonPink,
-                          neonBlue,
-                          neonRed,
-                        ),
-                      ),
-                    );
-                  },
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Center(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final size =
+                            constraints.maxWidth < constraints.maxHeight
+                                ? constraints.maxWidth
+                                : constraints.maxHeight;
+                        return GestureDetector(
+                          onPanStart: _onPanStart,
+                          onPanUpdate: _onPanUpdate,
+                          onPanEnd: _onPanEnd,
+                          child: SizedBox(
+                            width: size,
+                            height: size,
+                            child: _buildGrid(
+                              neonGreen,
+                              neonPink,
+                              neonBlue,
+                              neonRed,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            // Directional buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                // Directional buttons
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Column(
                     children: [
-                      _directionButton(
-                        Icons.arrow_upward,
-                        Direction.up,
-                        neonGreen,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _directionButton(
+                            Icons.arrow_upward,
+                            Direction.up,
+                            neonGreen,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _directionButton(
-                        Icons.arrow_back,
-                        Direction.left,
-                        neonGreen,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _directionButton(
+                            Icons.arrow_back,
+                            Direction.left,
+                            neonGreen,
+                          ),
+                          const SizedBox(width: 32),
+                          _directionButton(
+                            Icons.arrow_forward,
+                            Direction.right,
+                            neonGreen,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 32),
-                      _directionButton(
-                        Icons.arrow_forward,
-                        Direction.right,
-                        neonGreen,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _directionButton(
+                            Icons.arrow_downward,
+                            Direction.down,
+                            neonGreen,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _directionButton(
-                        Icons.arrow_downward,
-                        Direction.down,
-                        neonGreen,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (isGameOver)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Game Over',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontFamily: 'Orbitron',
-                    color: neonRed,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                    shadows: [
-                      Shadow(color: neonRed.withOpacity(0.5), blurRadius: 8),
                     ],
                   ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _neonButton(
-                isGameOver || !isStarted ? 'Start Game' : 'Restart',
-                _startGame,
-                neonGreen,
-              ),
+                if (isGameOver)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Game Over',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontFamily: 'Orbitron',
+                        color: neonRed,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                        shadows: [
+                          Shadow(color: neonRed.withOpacity(0.5), blurRadius: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _neonButton(
+                    isGameOver || !isStarted ? 'Start Game' : 'Restart',
+                    _startGame,
+                    neonGreen,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          if (isPaused)
+            GamePauseOverlay(
+              onResume: _resume,
+              onRestart: _startGame,
+              onQuit: () => Navigator.of(context).pop(),
+              accentColor: neonGreen,
+            ),
+        ],
       ),
     );
   }
@@ -472,185 +499,9 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
     );
   }
 
-  Widget _neonCell(
-    Color color, {
-    IconData? icon,
-    bool isHead = false,
-    bool isFood = false,
-  }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 100),
-      margin: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(isFood ? 0.7 : 0.3),
-        borderRadius: BorderRadius.circular(isHead ? 8 : 4),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.7),
-            blurRadius: isHead ? 16 : 8,
-            spreadRadius: isHead ? 2 : 1,
-          ),
-        ],
-        border: Border.all(color: color, width: isHead ? 2 : 1),
-      ),
-      child: icon != null
-          ? Center(
-              child: Icon(icon, color: Colors.white, size: isHead ? 22 : 18),
-            )
-          : null,
-    );
-  }
-
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
     return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
-
-  Widget _realisticHead(double w, double h, Color color, Direction dir) {
-    // Head is a larger circle with neon glow and two eyes
-    return SizedBox(
-      width: w,
-      height: h,
-      child: Stack(
-        children: [
-          Center(
-            child: Container(
-              width: w * 0.85,
-              height: h * 0.85,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [color.withOpacity(0.9), color.withOpacity(0.3)],
-                  radius: 0.8,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: color.withOpacity(0.7),
-                    blurRadius: 18,
-                    spreadRadius: 2,
-                  ),
-                ],
-                border: Border.all(color: color, width: 2),
-              ),
-            ),
-          ),
-          // Eyes
-          ..._buildEyes(w, h, dir),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildEyes(double w, double h, Direction dir) {
-    // Eyes are two small white dots, positioned based on direction
-    double dx = 0, dy = 0;
-    switch (dir) {
-      case Direction.up:
-        dx = 0;
-        dy = -h * 0.18;
-        break;
-      case Direction.down:
-        dx = 0;
-        dy = h * 0.18;
-        break;
-      case Direction.left:
-        dx = -w * 0.18;
-        dy = 0;
-        break;
-      case Direction.right:
-        dx = w * 0.18;
-        dy = 0;
-        break;
-    }
-    return [
-      Positioned(
-        left: w * 0.32 + dx,
-        top: h * 0.32 + dy,
-        child: Container(
-          width: w * 0.13,
-          height: h * 0.13,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: Colors.white.withOpacity(0.7), blurRadius: 2),
-            ],
-          ),
-        ),
-      ),
-      Positioned(
-        left: w * 0.55 + dx,
-        top: h * 0.32 + dy,
-        child: Container(
-          width: w * 0.13,
-          height: h * 0.13,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(color: Colors.white.withOpacity(0.7), blurRadius: 2),
-            ],
-          ),
-        ),
-      ),
-    ];
-  }
-
-  Widget _realisticBodySegment(
-    double w,
-    double h,
-    Color color,
-    Color headColor,
-    int i,
-    int total,
-  ) {
-    // Body segments are slightly smaller, with a gradient for depth
-    final double size = 0.7 + 0.2 * (i / total); // tail is smaller
-    return Center(
-      child: Container(
-        width: w * size,
-        height: h * size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              Color.lerp(color, headColor, i / total)!.withOpacity(0.8),
-              color.withOpacity(0.3),
-            ],
-            radius: 0.8,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.5),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
-          border: Border.all(color: color, width: 1),
-        ),
-      ),
-    );
-  }
-
-  Widget _realisticFood(double w, double h, Color color) {
-    // Food is a glowing star
-    return Center(
-      child: Container(
-        width: w * 0.7,
-        height: h * 0.7,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.7),
-              blurRadius: 16,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Icon(Icons.star, color: Colors.white, size: w * 0.5),
-      ),
-    );
   }
 
   Widget _directionButton(IconData icon, Direction dir, Color color) {
@@ -662,7 +513,10 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
         size: 74,
         iconSize: 34,
         onPressed: () {
-          if (!_isOpposite(dir, direction) && isStarted && !isGameOver) {
+          if (!_isOpposite(dir, direction) &&
+              isStarted &&
+              !isGameOver &&
+              !isPaused) {
             setState(() {
               nextDirection = dir;
             });

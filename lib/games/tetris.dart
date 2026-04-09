@@ -7,6 +7,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class TetrisGame extends StatefulWidget {
   const TetrisGame({super.key});
@@ -19,52 +20,24 @@ const int rowCount = 24;
 const int colCount = 14;
 const int blockSize = 20;
 
-// Funky neon colors for blocks
 const tetrominoColors = [
-  Color(0xFF00FFF7), // Neon cyan
-  Color(0xFFFFFF00), // Neon yellow
-  Color(0xFFFF00FF), // Neon magenta
-  Color(0xFF39FF14), // Neon green
-  Color(0xFFFF073A), // Neon red
-  Color(0xFF1E90FF), // Neon blue
-  Color(0xFFFFA500), // Neon orange
+  Color(0xFF00FFF7),
+  Color(0xFFFFFF00),
+  Color(0xFFFF00FF),
+  Color(0xFF39FF14),
+  Color(0xFFFF073A),
+  Color(0xFF1E90FF),
+  Color(0xFFFFA500),
 ];
 
 const tetrominoShapes = [
-  // I
-  [
-    [1, 1, 1, 1],
-  ],
-  // O
-  [
-    [1, 1],
-    [1, 1],
-  ],
-  // T
-  [
-    [0, 1, 0],
-    [1, 1, 1],
-  ],
-  // S
-  [
-    [0, 1, 1],
-    [1, 1, 0],
-  ],
-  // Z
-  [
-    [1, 1, 0],
-    [0, 1, 1],
-  ],
-  // J
-  [
-    [1, 0, 0],
-    [1, 1, 1],
-  ],
-  // L
-  [
-    [0, 0, 1],
-    [1, 1, 1],
-  ],
+  [[1, 1, 1, 1]],
+  [[1, 1], [1, 1]],
+  [[0, 1, 0], [1, 1, 1]],
+  [[0, 1, 1], [1, 1, 0]],
+  [[1, 1, 0], [0, 1, 1]],
+  [[1, 0, 0], [1, 1, 1]],
+  [[0, 0, 1], [1, 1, 1]],
 ];
 
 class Tetromino {
@@ -105,6 +78,7 @@ class _TetrisGameState extends State<TetrisGame> {
   Tetromino? next;
   Timer? timer;
   bool isGameOver = false;
+  bool isPaused = false;
   int score = 0;
   int highScore = 0;
   bool isStarted = false;
@@ -114,7 +88,6 @@ class _TetrisGameState extends State<TetrisGame> {
     super.initState();
     GameHaptics.preload();
     _loadHighScore();
-    // Do not start the game immediately
     isStarted = false;
   }
 
@@ -135,6 +108,7 @@ class _TetrisGameState extends State<TetrisGame> {
     setState(() {
       grid = List.generate(rowCount, (_) => List.filled(colCount, null));
       isGameOver = false;
+      isPaused = false;
       score = 0;
       isStarted = true;
       current = null;
@@ -238,7 +212,7 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   void _tick() {
-    if (isGameOver || current == null) return;
+    if (isGameOver || isPaused || current == null) return;
     final moved = current!.copyWith(row: current!.row + 1);
     if (_collides(moved)) {
       _fixTetromino();
@@ -250,7 +224,7 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   void _move(int dx) {
-    if (isGameOver || current == null) return;
+    if (isGameOver || isPaused || current == null) return;
     final moved = current!.copyWith(col: current!.col + dx);
     if (!_collides(moved)) {
       setState(() {
@@ -260,7 +234,7 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   void _rotate() {
-    if (isGameOver || current == null) return;
+    if (isGameOver || isPaused || current == null) return;
     final rotated = current!.copyWith(
       shape: current!.shape.map((row) => List<int>.from(row)).toList(),
     );
@@ -273,7 +247,7 @@ class _TetrisGameState extends State<TetrisGame> {
   }
 
   void _drop() {
-    if (isGameOver || current == null) return;
+    if (isGameOver || isPaused || current == null) return;
     Tetromino dropped = current!;
     while (!_collides(dropped.copyWith(row: dropped.row + 1))) {
       dropped = dropped.copyWith(row: dropped.row + 1);
@@ -284,6 +258,21 @@ class _TetrisGameState extends State<TetrisGame> {
     _fixTetromino();
   }
 
+  void _togglePause() {
+    if (!isStarted || isGameOver) return;
+    setState(() {
+      isPaused = !isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
+  }
+
   @override
   void dispose() {
     timer?.cancel();
@@ -292,6 +281,7 @@ class _TetrisGameState extends State<TetrisGame> {
 
   @override
   Widget build(BuildContext context) {
+    final neonBlue = const Color(0xFF00FFF7);
     return Scaffold(
       backgroundColor: const Color(0xFF18122B),
       appBar: AppBar(
@@ -316,6 +306,12 @@ class _TetrisGameState extends State<TetrisGame> {
             ],
             tip: 'Flatten the stack first. Tetris scoring comes later.',
           ),
+          if (isStarted && !isGameOver)
+            IconButton(
+              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+              color: neonBlue,
+              onPressed: _togglePause,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF39FF14)),
             onPressed: () {
@@ -327,176 +323,187 @@ class _TetrisGameState extends State<TetrisGame> {
         ],
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (!isStarted || isGameOver) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (!isStarted || isGameOver) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (isGameOver)
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              'Game Over',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontFamily: 'Orbitron',
+                                color: Colors.redAccent.shade200,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 2,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withOpacity(0.5),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        _neonStartButton(),
+                      ],
+                    ),
+                  );
+                }
+                return Column(
                   children: [
-                    if (isGameOver)
-                      Padding(
-                        padding: const EdgeInsets.all(16),
+                    Card(
+                      color: Colors.white.withOpacity(0.12),
+                      elevation: 10,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 8,
+                        ),
                         child: Text(
-                          'Game Over',
-                          style: TextStyle(
-                            fontSize: 32,
+                          'High Score: $highScore',
+                          style: const TextStyle(
+                            fontSize: 20,
                             fontFamily: 'Orbitron',
-                            color: Colors.redAccent.shade200,
+                            color: Color(0xFFFF00FF),
                             fontWeight: FontWeight.bold,
                             letterSpacing: 2,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.5),
-                                blurRadius: 8,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Card(
+                      color: Colors.white.withOpacity(0.1),
+                      elevation: 8,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          'Score: $score',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontFamily: 'Orbitron',
+                            color: Color(0xFF00FFF7),
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: colCount / rowCount,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.08),
+                              border: Border.all(
+                                color: const Color(0xFF00FFF7),
+                                width: 2,
+                              ),
+                              backgroundBlendMode: BlendMode.overlay,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.4),
+                                  blurRadius: 24,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                            child: _buildGrid(),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          const spacing = 14.0;
+                          final buttonSize = ((constraints.maxWidth -
+                                          (spacing * 3)) /
+                                      4)
+                                  .clamp(56.0, 80.0)
+                              as double;
+                          final iconSize = (buttonSize * 0.55).clamp(28.0, 44.0)
+                              as double;
+
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _funkyButton(
+                                Icons.arrow_left,
+                                () => _move(-1),
+                                const Color(0xFF1E90FF),
+                                size: buttonSize,
+                                iconSize: iconSize,
+                                hitSize: buttonSize,
+                              ),
+                              const SizedBox(width: spacing),
+                              _funkyButton(
+                                Icons.rotate_right,
+                                _rotate,
+                                const Color(0xFFFF00FF),
+                                size: buttonSize,
+                                iconSize: iconSize,
+                                hitSize: buttonSize,
+                              ),
+                              const SizedBox(width: spacing),
+                              _funkyButton(
+                                Icons.arrow_right,
+                                () => _move(1),
+                                const Color(0xFFFFA500),
+                                size: buttonSize,
+                                iconSize: iconSize,
+                                hitSize: buttonSize,
+                              ),
+                              const SizedBox(width: spacing),
+                              _funkyButton(
+                                Icons.arrow_downward,
+                                _drop,
+                                const Color(0xFF39FF14),
+                                size: buttonSize,
+                                iconSize: iconSize,
+                                hitSize: buttonSize,
                               ),
                             ],
-                          ),
-                        ),
+                          );
+                        },
                       ),
-                    _neonStartButton(),
+                    ),
+                    const SizedBox(height: 8),
                   ],
-                ),
-              );
-            }
-            return Column(
-              children: [
-                Card(
-                  color: Colors.white.withOpacity(0.12),
-                  elevation: 10,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      'High Score: $highScore',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontFamily: 'Orbitron',
-                        color: Color(0xFFFF00FF),
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Card(
-                  color: Colors.white.withOpacity(0.1),
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      'Score: $score',
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontFamily: 'Orbitron',
-                        color: Color(0xFF00FFF7),
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: Center(
-                    child: AspectRatio(
-                      aspectRatio: colCount / rowCount,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          border: Border.all(
-                            color: const Color(0xFF00FFF7),
-                            width: 2,
-                          ),
-                          backgroundBlendMode: BlendMode.overlay,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 24,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: _buildGrid(),
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      const spacing = 14.0;
-                      final buttonSize = ((constraints.maxWidth -
-                                      (spacing * 3)) /
-                                  4)
-                              .clamp(56.0, 80.0)
-                          as double;
-                      final iconSize = (buttonSize * 0.55).clamp(28.0, 44.0)
-                          as double;
-
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _funkyButton(
-                            Icons.arrow_left,
-                            () => _move(-1),
-                            const Color(0xFF1E90FF),
-                            size: buttonSize,
-                            iconSize: iconSize,
-                            hitSize: buttonSize,
-                          ),
-                          const SizedBox(width: spacing),
-                          _funkyButton(
-                            Icons.rotate_right,
-                            _rotate,
-                            const Color(0xFFFF00FF),
-                            size: buttonSize,
-                            iconSize: iconSize,
-                            hitSize: buttonSize,
-                          ),
-                          const SizedBox(width: spacing),
-                          _funkyButton(
-                            Icons.arrow_right,
-                            () => _move(1),
-                            const Color(0xFFFFA500),
-                            size: buttonSize,
-                            iconSize: iconSize,
-                            hitSize: buttonSize,
-                          ),
-                          const SizedBox(width: spacing),
-                          _funkyButton(
-                            Icons.arrow_downward,
-                            _drop,
-                            const Color(0xFF39FF14),
-                            size: buttonSize,
-                            iconSize: iconSize,
-                            hitSize: buttonSize,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            );
-          },
+                );
+              },
+            ),
+            if (isPaused)
+              GamePauseOverlay(
+                onResume: _resume,
+                onRestart: _startGame,
+                onQuit: () => Navigator.of(context).pop(),
+                accentColor: neonBlue,
+              ),
+          ],
         ),
       ),
     );

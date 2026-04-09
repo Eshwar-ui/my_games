@@ -7,6 +7,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class FlappyBirdGame extends StatefulWidget {
   const FlappyBirdGame({super.key});
@@ -33,6 +34,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   int highScore = 0;
   bool isGameOver = false;
   bool isStarted = false;
+  bool isPaused = false;
   Timer? gameTimer;
   Timer? pipeTimer;
   double screenHeight = 0;
@@ -68,6 +70,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
       score = 0;
       isGameOver = false;
       isStarted = true;
+      isPaused = false;
     });
     gameTimer?.cancel();
     pipeTimer?.cancel();
@@ -100,7 +103,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   void _tick() {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
 
     final previousScore = score;
     final nextBirdVY = birdVY + gravity;
@@ -148,6 +151,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
   }
 
   void _addPipe() {
+    if (isPaused) return;
     final rand = Random();
     final centerY =
         rand.nextDouble() * (screenHeight - gap - 120) +
@@ -187,12 +191,28 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
       GameHaptics.tap();
       return;
     }
-    if (isGameOver) return;
+    if (isGameOver || isPaused) return;
     setState(() {
       birdVY = flapPower;
     });
     GameHaptics.tap();
   }
+
+  void _togglePause() {
+    if (!isStarted || isGameOver) return;
+    setState(() {
+      isPaused = !isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
+  }
+
 
   @override
   void dispose() {
@@ -237,6 +257,12 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
                 ],
                 tip: 'Short rhythmic taps are steadier than panic flapping.',
               ),
+              if (isStarted && !isGameOver)
+                IconButton(
+                  icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+                  color: const Color(0xFFFFFF00),
+                  onPressed: _togglePause,
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -330,6 +356,13 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
                         ],
                       ),
                     ),
+                  ),
+                if (isPaused)
+                  GamePauseOverlay(
+                    onResume: _resume,
+                    onRestart: _startGame,
+                    onQuit: () => Navigator.of(context).pop(),
+                    accentColor: neonYellow,
                   ),
               ],
             ),

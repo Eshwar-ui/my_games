@@ -11,6 +11,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class SpaceWarGame extends StatefulWidget {
   const SpaceWarGame({super.key});
@@ -31,8 +32,6 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   static const double enemyBulletSpeed = 6.5;
   static const int moveRepeatMs = 70;
   static const int shootRepeatMs = 150;
-  // Controls are rendered as a multi-line panel (icons + hint text).
-  // This value is used to position the player above the panel.
   static const double controlPanelHeight = 220;
   static const int tickMs = 16;
 
@@ -52,6 +51,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   double spawnCooldownMs = 0;
   bool isGameOver = false;
   bool isStarted = false;
+  bool isPaused = false;
   async.Timer? gameTimer;
   async.Timer? _moveRepeatTimer;
   async.Timer? _shootRepeatTimer;
@@ -62,9 +62,6 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   void initState() {
     super.initState();
     GameHaptics.preload();
-    // Flame's default image prefix is `assets/images/`, but this project stores
-    // sprites under `assets/space_war/...`. Align the prefix so the loader can
-    // find the sprite sheet.
     Flame.images.prefix = 'assets/';
     _atlasFuture = _loadAtlas();
     _loadHighScore();
@@ -82,8 +79,6 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
     }
 
     return _SpriteAtlas(
-      // This sheet has large transparent padding inside each visual grid cell,
-      // so use tight source rects instead of whole-cell slicing.
       playerIdle: spriteFromRect(const Rect.fromLTWH(215, 330, 235, 170)),
       enemyA: spriteFromRect(const Rect.fromLTWH(715, 320, 220, 185)),
       enemyB: spriteFromRect(const Rect.fromLTWH(935, 320, 240, 190)),
@@ -118,6 +113,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
       score = 0;
       isGameOver = false;
       isStarted = true;
+      isPaused = false;
       _configureWave(1);
     });
     gameTimer?.cancel();
@@ -154,7 +150,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _tick() {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
 
     final updatedEnemies = enemies.map((enemy) => enemy.copy()).toList();
     final updatedPlayerBullets = playerBullets
@@ -353,7 +349,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _movePlayer(int dir) {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
     setState(() {
       playerX += dir * moveStep;
       playerX = playerX
@@ -366,7 +362,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _shoot() {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
     final shipCenterX = screenWidth / 2 + playerX;
     final bulletStartY = _playerTop() - bulletHeight / 2;
     setState(() {
@@ -375,7 +371,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _startMoveRepeat(int dir) {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
     _movePlayer(dir);
     _moveRepeatTimer?.cancel();
     _moveRepeatTimer = async.Timer.periodic(
@@ -390,7 +386,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   }
 
   void _startShootRepeat() {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
     _shoot();
     _shootRepeatTimer?.cancel();
     _shootRepeatTimer = async.Timer.periodic(
@@ -402,6 +398,25 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   void _stopShootRepeat() {
     _shootRepeatTimer?.cancel();
     _shootRepeatTimer = null;
+  }
+
+  void _togglePause() {
+    if (!isStarted || isGameOver) return;
+    setState(() {
+      isPaused = !isPaused;
+      if (isPaused) {
+        _stopMoveRepeat();
+        _stopShootRepeat();
+      }
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
   }
 
   @override
@@ -472,6 +487,12 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                     ],
                     tip: 'Short lateral corrections are safer than huge swings across the screen.',
                   ),
+                  if (isStarted && !isGameOver)
+                    IconButton(
+                      icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+                      color: neonBlue,
+                      onPressed: _togglePause,
+                    ),
                   Padding(
                     padding: const EdgeInsets.only(right: 16),
                     child: Center(
@@ -482,6 +503,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
               ),
               body: Stack(
                 children: [
+                   // The Game Content
                   ...enemies.map((enemy) => _buildEnemy(enemy, atlas)),
                   ...playerBullets.map((bullet) => _buildBullet(bullet, atlas)),
                   ...enemyBullets.map((bullet) => _buildBullet(bullet, atlas)),
@@ -622,6 +644,13 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                         ),
                       ),
                     ),
+                  if (isPaused)
+                    GamePauseOverlay(
+                      onResume: _resume,
+                      onRestart: _startGame,
+                      onQuit: () => Navigator.of(context).pop(),
+                      accentColor: neonBlue,
+                    ),
                 ],
               ),
             );
@@ -646,7 +675,6 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
           fontFamily: 'Orbitron',
           color: color,
           fontWeight: FontWeight.bold,
-          // letterSpacing: 1.2,
         ),
       ),
     );
@@ -689,18 +717,18 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _statCard('Wave ${max(wave, 1)}', neonBlue),
-                    ),
+            Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _statCard('Wave ${max(wave, 1)}', neonBlue),
                   ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _statCard('Score $score', neonYellow),
+                ),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _statCard('Score $score', neonYellow),
                   ),
                 ),
               ],

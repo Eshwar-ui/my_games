@@ -6,6 +6,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class MemoryMatchGame extends StatefulWidget {
   const MemoryMatchGame({super.key});
@@ -21,6 +22,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   int _moves = 0;
   int _matches = 0;
   bool _won = false;
+  bool _isPaused = false;
 
   @override
   void initState() {
@@ -40,12 +42,13 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
     _moves = 0;
     _matches = 0;
     _won = false;
+    _isPaused = false;
     ArcadeStatsService.recordPlay('memory_match');
     setState(() {});
   }
 
   Future<void> _handleTap(int index) async {
-    if (_locked || _won || _cards[index].matched || _cards[index].revealed) {
+    if (_isPaused || _locked || _won || _cards[index].matched || _cards[index].revealed) {
       return;
     }
 
@@ -95,6 +98,21 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
     }
   }
 
+  void _togglePause() {
+    if (_won) return;
+    setState(() {
+      _isPaused = !_isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      _isPaused = false;
+    });
+    GameHaptics.light();
+  }
+
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFFFF6B6B);
@@ -122,6 +140,12 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
             ],
             tip: 'Open corners and edges early to build a reliable memory map.',
           ),
+          if (!_won)
+            IconButton(
+              icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+              color: accent,
+              onPressed: _togglePause,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Color(0xFF39FF14)),
             onPressed: _startGame,
@@ -129,94 +153,105 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Column(
-            children: [
-              Row(
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              child: Column(
                 children: [
-                  Expanded(child: _statCard('Moves', '$_moves', accent)),
-                  const SizedBox(width: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _statCard('Moves', '$_moves', accent)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _statCard(
+                          'Pairs',
+                          '$_matches / 8',
+                          const Color(0xFF00FFF7),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   Expanded(
-                    child: _statCard(
-                      'Pairs',
-                      '$_matches / 8',
-                      const Color(0xFF00FFF7),
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _cards.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 4,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                      ),
+                      itemBuilder: (context, index) {
+                        final card = _cards[index];
+                        final revealed = card.revealed || card.matched;
+                        return GestureDetector(
+                          onTap: () => _handleTap(index),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            decoration: BoxDecoration(
+                              color: revealed
+                                  ? accent.withOpacity(card.matched ? 0.2 : 0.14)
+                                  : const Color(0xFF24193D),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: revealed ? accent : Colors.white24,
+                                width: 2,
+                              ),
+                              boxShadow: revealed
+                                  ? [
+                                      BoxShadow(
+                                        color: accent.withOpacity(0.25),
+                                        blurRadius: 14,
+                                      ),
+                                    ]
+                                  : const [],
+                            ),
+                            child: Center(
+                              child: Text(
+                                revealed ? card.symbol : '?',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: revealed ? accent : Colors.white54,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
+                  ),
+                  if (_won) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Board cleared in $_moves moves',
+                      style: const TextStyle(
+                        color: Color(0xFF39FF14),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  ArcadeButton(
+                    label: _won ? 'Play Again' : 'Restart',
+                    color: accent,
+                    onPressed: _startGame,
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _cards.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                  ),
-                  itemBuilder: (context, index) {
-                    final card = _cards[index];
-                    final revealed = card.revealed || card.matched;
-                    return GestureDetector(
-                      onTap: () => _handleTap(index),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        decoration: BoxDecoration(
-                          color: revealed
-                              ? accent.withOpacity(card.matched ? 0.2 : 0.14)
-                              : const Color(0xFF24193D),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: revealed ? accent : Colors.white24,
-                            width: 2,
-                          ),
-                          boxShadow: revealed
-                              ? [
-                                  BoxShadow(
-                                    color: accent.withOpacity(0.25),
-                                    blurRadius: 14,
-                                  ),
-                                ]
-                              : const [],
-                        ),
-                        child: Center(
-                          child: Text(
-                            revealed ? card.symbol : '?',
-                            style: TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: revealed ? accent : Colors.white54,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (_won) ...[
-                const SizedBox(height: 12),
-                Text(
-                  'Board cleared in $_moves moves',
-                  style: const TextStyle(
-                    color: Color(0xFF39FF14),
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              ArcadeButton(
-                label: _won ? 'Play Again' : 'Restart',
-                color: accent,
-                onPressed: _startGame,
-              ),
-            ],
+            ),
           ),
-        ),
+          if (_isPaused)
+            GamePauseOverlay(
+              onResume: _resume,
+              onRestart: _startGame,
+              onQuit: () => Navigator.of(context).pop(),
+              accentColor: accent,
+            ),
+        ],
       ),
     );
   }

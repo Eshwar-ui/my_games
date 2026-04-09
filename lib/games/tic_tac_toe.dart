@@ -5,6 +5,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class TicTacToeGame extends StatefulWidget {
   const TicTacToeGame({super.key});
@@ -27,6 +28,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
     gridSize,
     (_) => List.filled(gridSize, false),
   );
+  bool _isPaused = false;
 
   late AnimationController _billboardController;
   late Animation<Offset> _billboardOffset;
@@ -36,26 +38,23 @@ class _TicTacToeGameState extends State<TicTacToeGame>
     super.initState();
     GameHaptics.preload();
     ArcadeStatsService.recordPlay('tic_tac_toe');
-    debugPrint('TicTacToeGameState: initState, using TickerProviderStateMixin');
     _billboardController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    _billboardOffset =
-        Tween<Offset>(
-          begin: const Offset(0, -1.2),
-          end: const Offset(0, 0.1),
-        ).animate(
-          CurvedAnimation(
-            parent: _billboardController,
-            curve: Curves.elasticOut,
-          ),
-        );
+    _billboardOffset = Tween<Offset>(
+      begin: const Offset(0, -1.2),
+      end: const Offset(0, 0.1),
+    ).animate(
+      CurvedAnimation(
+        parent: _billboardController,
+        curve: Curves.elasticOut,
+      ),
+    );
   }
 
   @override
   void dispose() {
-    debugPrint('TicTacToeGameState: dispose called');
     _billboardController.dispose();
     super.dispose();
   }
@@ -67,6 +66,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
       _currentPlayer = 'X';
       _winner = null;
       _isDraw = false;
+      _isPaused = false;
       _winningCells = List.generate(
         gridSize,
         (_) => List.filled(gridSize, false),
@@ -76,7 +76,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
   }
 
   void _handleTap(int row, int col) {
-    if (_board[row][col] != null || _winner != null) return;
+    if (_isPaused || _board[row][col] != null || _winner != null) return;
     var didWin = false;
     var didDraw = false;
     setState(() {
@@ -153,6 +153,21 @@ class _TicTacToeGameState extends State<TicTacToeGame>
     return false;
   }
 
+  void _togglePause() {
+    if (_winner != null || _isDraw) return;
+    setState(() {
+      _isPaused = !_isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      _isPaused = false;
+    });
+    GameHaptics.light();
+  }
+
   @override
   Widget build(BuildContext context) {
     final neonBlue = const Color(0xFF00FFF7);
@@ -183,6 +198,12 @@ class _TicTacToeGameState extends State<TicTacToeGame>
             ],
             tip: 'Open from the center when you can. It gives the most winning lines.',
           ),
+          if (_winner == null && !_isDraw)
+            IconButton(
+              icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+              color: neonBlue,
+              onPressed: _togglePause,
+            ),
           IconButton(
             icon: Icon(Icons.refresh, color: neonGreen),
             onPressed: () {
@@ -193,68 +214,82 @@ class _TicTacToeGameState extends State<TicTacToeGame>
           ),
         ],
       ),
-      body: Center(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Billboard animation at the top (always on top)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedBuilder(
-                animation: _billboardController,
-                builder: (context, child) {
-                  if (_winner == null) return const SizedBox.shrink();
-                  return SlideTransition(
-                    position: _billboardOffset,
-                    child: _buildBillboard(_winner!),
-                  );
-                },
-              ),
-            ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      body: Stack(
+        children: [
+          Center(
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                if (_isDraw)
-                  Text(
-                    'It\'s a Draw!',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontFamily: 'Orbitron',
-                      fontWeight: FontWeight.bold,
-                      color: neonYellow,
-                      letterSpacing: 2,
-                      shadows: [
-                        Shadow(
-                          color: neonYellow.withOpacity(0.5),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                  )
-                else if (_winner == null)
-                  Text(
-                    'Player $_currentPlayer\'s turn',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontFamily: 'Orbitron',
-                      color: neonBlue,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 2,
-                      shadows: [
-                        Shadow(color: neonBlue.withOpacity(0.5), blurRadius: 8),
-                      ],
-                    ),
+                // Billboard animation at the top (always on top)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AnimatedBuilder(
+                    animation: _billboardController,
+                    builder: (context, child) {
+                      if (_winner == null) return const SizedBox.shrink();
+                      return SlideTransition(
+                        position: _billboardOffset,
+                        child: _buildBillboard(_winner!),
+                      );
+                    },
                   ),
-                const SizedBox(height: 32),
-                _buildBoard(neonBlue, neonPink),
-                const SizedBox(height: 32),
-                _neonButton('Restart', _resetGame, neonGreen),
+                ),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isDraw)
+                      Text(
+                        'It\'s a Draw!',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontFamily: 'Orbitron',
+                          fontWeight: FontWeight.bold,
+                          color: neonYellow,
+                          letterSpacing: 2,
+                          shadows: [
+                            Shadow(
+                              color: neonYellow.withOpacity(0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_winner == null)
+                      Text(
+                        'Player $_currentPlayer\'s turn',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontFamily: 'Orbitron',
+                          color: neonBlue,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                          shadows: [
+                            Shadow(
+                              color: neonBlue.withOpacity(0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 32),
+                    _buildBoard(neonBlue, neonPink),
+                    const SizedBox(height: 32),
+                    _neonButton('Restart', _resetGame, neonGreen),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          if (_isPaused)
+            GamePauseOverlay(
+              onResume: _resume,
+              onRestart: _resetGame,
+              onQuit: () => Navigator.of(context).pop(),
+              accentColor: neonBlue,
+            ),
+        ],
       ),
     );
   }
@@ -291,7 +326,6 @@ class _TicTacToeGameState extends State<TicTacToeGame>
   Widget _buildCell(int row, int col, Color neonBlue, Color neonPink) {
     final value = _board[row][col];
     final isWinning = _winningCells[row][col];
-    final isWinner = _winner == value;
     final isLoser = _winner != null && value != null && value != _winner;
     Color color = value == 'X'
         ? neonBlue

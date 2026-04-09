@@ -6,6 +6,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class Game2048 extends StatefulWidget {
   const Game2048({super.key});
@@ -23,6 +24,7 @@ class _Game2048State extends State<Game2048> {
   bool isGameOver = false;
   bool isGameWon = false;
   bool isMoving = false;
+  bool isPaused = false;
   Offset? _dragStart;
   Offset? _dragCurrent;
 
@@ -54,6 +56,7 @@ class _Game2048State extends State<Game2048> {
       isGameOver = false;
       isGameWon = false;
       isMoving = false;
+      isPaused = false;
       _addRandomTile();
       _addRandomTile();
     });
@@ -72,7 +75,7 @@ class _Game2048State extends State<Game2048> {
   }
 
   void _move(Direction dir) async {
-    if (isMoving || isGameOver || isGameWon) return;
+    if (isMoving || isGameOver || isGameWon || isPaused) return;
     setState(() => isMoving = true);
     final oldBoard = board!.map((row) => [...row]).toList();
     int gained = 0;
@@ -193,20 +196,22 @@ class _Game2048State extends State<Game2048> {
   }
 
   void _onPanStart(DragStartDetails details) {
+    if (isPaused) return;
     _dragStart = details.localPosition;
     _dragCurrent = details.localPosition;
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
+    if (isPaused) return;
     _dragCurrent = details.localPosition;
   }
 
   void _onPanEnd(DragEndDetails details) {
-    if (_dragStart == null || _dragCurrent == null) return;
+    if (isPaused || _dragStart == null || _dragCurrent == null) return;
     final Offset delta = _dragCurrent! - _dragStart!;
     _dragStart = null;
     _dragCurrent = null;
-    if (delta.distance < 40) return; // Minimum swipe distance
+    if (delta.distance < 40) return;
     if (delta.dx.abs() > delta.dy.abs()) {
       if (delta.dx > 0) {
         _move(Direction.right);
@@ -220,6 +225,21 @@ class _Game2048State extends State<Game2048> {
         _move(Direction.up);
       }
     }
+  }
+
+  void _togglePause() {
+    if (isGameOver || isGameWon) return;
+    setState(() {
+      isPaused = !isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
   }
 
   @override
@@ -262,6 +282,12 @@ class _Game2048State extends State<Game2048> {
             ],
             tip: 'Keep your largest tile parked in one corner and build around it.',
           ),
+          if (!isGameOver && !isGameWon)
+            IconButton(
+              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+              color: neonPink,
+              onPressed: _togglePause,
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(
@@ -281,91 +307,102 @@ class _Game2048State extends State<Game2048> {
         ],
       ),
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            const SizedBox(height: 8),
-            Card(
-              color: Colors.white.withOpacity(0.1),
-              elevation: 8,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 8,
-                ),
-                child: Text(
-                  'Score: $score',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Orbitron',
-                    color: Color(0xFFFF00FF),
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
+            Column(
+              children: [
+                const SizedBox(height: 8),
+                Card(
+                  color: Colors.white.withOpacity(0.1),
+                  elevation: 8,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'Score: $score',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontFamily: 'Orbitron',
+                        color: Color(0xFFFF00FF),
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Center(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final size = constraints.maxWidth < constraints.maxHeight
-                        ? constraints.maxWidth
-                        : constraints.maxHeight;
-                    return GestureDetector(
-                      onPanStart: _onPanStart,
-                      onPanUpdate: _onPanUpdate,
-                      onPanEnd: _onPanEnd,
-                      child: Container(
-                        width: size,
-                        height: size,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.04),
-                          border: Border.all(color: neonPink, width: 3),
-                          boxShadow: [
-                            BoxShadow(
-                              color: neonPink.withOpacity(0.2),
-                              blurRadius: 16,
-                              spreadRadius: 2,
+                const SizedBox(height: 8),
+                Expanded(
+                  child: Center(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final size = constraints.maxWidth < constraints.maxHeight
+                            ? constraints.maxWidth
+                            : constraints.maxHeight;
+                        return GestureDetector(
+                          onPanStart: _onPanStart,
+                          onPanUpdate: _onPanUpdate,
+                          onPanEnd: _onPanEnd,
+                          child: Container(
+                            width: size,
+                            height: size,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.04),
+                              border: Border.all(color: neonPink, width: 3),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: neonPink.withOpacity(0.2),
+                                  blurRadius: 16,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: _buildGrid(neonTileColors),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            if (isGameOver || isGameWon)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  isGameWon ? 'You Win!' : 'Game Over',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontFamily: 'Orbitron',
-                    color: isGameWon ? neonGreen : neonRed,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                    shadows: [
-                      Shadow(
-                        color: (isGameWon ? neonGreen : neonRed).withOpacity(
-                          0.5,
-                        ),
-                        blurRadius: 8,
-                      ),
-                    ],
+                            child: _buildGrid(neonTileColors),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _neonButton('Restart', _startGame, neonPink),
+                if (isGameOver || isGameWon)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      isGameWon ? 'You Win!' : 'Game Over',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontFamily: 'Orbitron',
+                        color: isGameWon ? neonGreen : neonRed,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2,
+                        shadows: [
+                          Shadow(
+                            color: (isGameWon ? neonGreen : neonRed).withOpacity(
+                              0.5,
+                            ),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _neonButton('Restart', _startGame, neonPink),
+                ),
+              ],
             ),
+            if (isPaused)
+              GamePauseOverlay(
+                onResume: _resume,
+                onRestart: _startGame,
+                onQuit: () => Navigator.of(context).pop(),
+                accentColor: neonPink,
+              ),
           ],
         ),
       ),

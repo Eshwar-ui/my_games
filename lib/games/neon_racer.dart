@@ -9,6 +9,7 @@ import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class NeonRacer extends StatefulWidget {
   const NeonRacer({super.key});
@@ -24,6 +25,7 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
   Timer? gameTimer;
   bool isGameOver = false;
   bool isStarted = false;
+  bool isPaused = false;
   int score = 0;
   int highScore = 0;
   double speed = 5.0;
@@ -84,6 +86,7 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
       speed = 5.0;
       isGameOver = false;
       isStarted = true;
+      isPaused = false;
       lastSpawnTime = DateTime.now();
     });
     gameTimer?.cancel();
@@ -91,7 +94,7 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
   }
 
   void _update() {
-    if (!isStarted || isGameOver) return;
+    if (!isStarted || isGameOver || isPaused) return;
 
     setState(() {
       // Move obstacles
@@ -142,7 +145,23 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
     }
   }
 
+  void _togglePause() {
+    if (!isStarted || isGameOver) return;
+    setState(() {
+      isPaused = !isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
+  }
+
   void _moveLeft() {
+    if (isPaused) return;
     if (playerLane > 0) {
       setState(() {
         playerLane--;
@@ -152,6 +171,7 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
   }
 
   void _moveRight() {
+    if (isPaused) return;
     if (playerLane < 2) {
       setState(() {
         playerLane++;
@@ -182,12 +202,18 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
             title: 'Neon Racer',
             accent: neonBlue,
             steps: [
-              'Tap left or right side of the screen to move.',
-              'Avoid incoming neon obstacles.',
-              'The game speeds up as your score increases.',
+              'Swipe left or right to change lanes.',
+              'Avoid obstacles and keep your speed up!',
+              'Game gets faster every 500 points.',
             ],
-            tip: 'Keep your eyes on the top of the lanes!',
+            tip: 'Focus on the gap between cars, not the cars themselves.',
           ),
+          if (isStarted && !isGameOver)
+            IconButton(
+              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+              color: neonBlue,
+              onPressed: _togglePause,
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Center(
@@ -344,6 +370,13 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
                   ],
                 ),
               ),
+            ),
+          if (isPaused)
+            GamePauseOverlay(
+              onResume: _resume,
+              onRestart: _startGame,
+              onQuit: () => Navigator.of(context).pop(),
+              accentColor: const Color(0xFF00FFF7),
             ),
         ],
       ),

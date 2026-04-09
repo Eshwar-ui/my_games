@@ -11,6 +11,7 @@ import '../services/arcade_stats_service.dart';
 import '../services/game_haptics.dart';
 import '../services/game_help.dart';
 import '../services/haptic_arcade_button.dart';
+import '../widgets/game_pause_overlay.dart';
 
 class BrickBreakerGame extends StatefulWidget {
   const BrickBreakerGame({super.key});
@@ -39,6 +40,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   List<List<bool>> bricks = [];
   bool isPlaying = false;
   bool isGameOver = false;
+  bool isPaused = false;
   async.Timer? gameTimer;
   Size? lastSize;
   int highScore = 0;
@@ -47,7 +49,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   void initState() {
     super.initState();
     GameHaptics.preload();
-    // So Flame can load `assets/<path>` correctly.
     Flame.images.prefix = 'assets/';
     _atlasFuture = _loadAtlas();
     _loadHighScore();
@@ -55,9 +56,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
 
   Future<_BrickSpriteAtlas> _loadAtlas() async {
     final image = await Flame.images.load(_atlasAsset);
-
-    // Crop by detecting alpha coverage columns, so it works even if the sheet
-    // isn't perfectly evenly spaced.
     final spriteRects = await _detectSpriteRects(image);
     spriteRects.sort((a, b) => a.left.compareTo(b.left));
 
@@ -77,7 +75,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
 
     final paddle = spriteFromRect(spriteRects[0]);
     final ball = spriteFromRect(spriteRects[1]);
-
     final brickVariantRects = spriteRects.sublist(2);
     final brickVariants = brickVariantRects.map(spriteFromRect).toList();
     return _BrickSpriteAtlas(
@@ -88,15 +85,14 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   }
 
   Future<List<Rect>> _detectSpriteRects(ui.Image image) async {
-    const alphaThreshold = 10; // ignore very faint glow speckles
+    const alphaThreshold = 10;
     const minSpriteWidth = 25;
-    const gapMergeColumns = 3; // merge runs separated by tiny transparent gaps
-    const padding = 2; // add a little padding so glow isn't clipped
+    const gapMergeColumns = 3;
+    const padding = 2;
 
     final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
     if (byteData == null) return [];
     final bytes = byteData.buffer.asUint8List();
-
     final width = image.width;
     final height = image.height;
 
@@ -105,7 +101,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
       return bytes[idx] > alphaThreshold;
     }
 
-    // Step 1: detect columns that have any visible pixels.
     final columnHas = List<bool>.filled(width, false);
     for (int x = 0; x < width; x++) {
       bool any = false;
@@ -118,7 +113,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
       columnHas[x] = any;
     }
 
-    // Step 2: convert column runs into initial segments.
     final segments = <({int left, int right})>[];
     int? start;
     for (int x = 0; x < width; x++) {
@@ -131,7 +125,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
     }
     if (start != null) segments.add((left: start, right: width - 1));
 
-    // Step 3: filter tiny runs and merge near-by runs (anti-aliasing gaps).
     final filtered = segments
         .where((s) => s.right - s.left + 1 >= minSpriteWidth)
         .toList();
@@ -152,12 +145,10 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
       }
     }
 
-    // Step 4: compute y bounds for each merged x-run.
     final rects = <Rect>[];
     for (final seg in merged) {
       int top = height;
       int bottom = -1;
-
       for (int y = 0; y < height; y++) {
         bool any = false;
         for (int x = seg.left; x <= seg.right; x++) {
@@ -171,14 +162,11 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
           bottom = max(bottom, y);
         }
       }
-
       if (bottom < 0) continue;
-
       final left = (seg.left - padding).clamp(0, width - 1);
       final right = (seg.right + padding).clamp(0, width - 1);
       final t = (top - padding).clamp(0, height - 1);
       final b = (bottom + padding).clamp(0, height - 1);
-
       rects.add(
         Rect.fromLTRB(
           left.toDouble(),
@@ -188,7 +176,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
         ),
       );
     }
-
     return rects;
   }
 
@@ -213,6 +200,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
     bricks = List.generate(rowCount, (_) => List.filled(colCount, true));
     isPlaying = true;
     isGameOver = false;
+    isPaused = false;
     gameTimer?.cancel();
     gameTimer = async.Timer.periodic(
       const Duration(milliseconds: 12),
@@ -238,7 +226,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
   }
 
   void _updateGame(double width, double height) {
-    if (!isPlaying) return;
+    if (!isPlaying || isPaused) return;
     var shouldSaveHighScore = false;
     setState(() {
       ballX += ballVX;
@@ -288,7 +276,6 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
           if (ballRect.overlaps(brickRect)) {
             bricks[row][col] = false;
             ballVY = -ballVY;
-            // High score update
             int score = _calculateScore();
             if (score > highScore) {
               highScore = score;
@@ -296,21 +283,17 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
             }
             GameHaptics.medium();
             if (bricks.every((row) => row.every((b) => !b))) {
-              // All bricks cleared: generate new random layer and increase difficulty
               final rand = Random();
               bricks = List.generate(rowCount, (row) {
-                // Generate a random row with a bias towards true
                 List<bool> brickRow = List.generate(
                   colCount,
                   (_) => rand.nextDouble() < 0.7,
                 );
-                // Ensure at least one brick per row
                 if (!brickRow.contains(true)) {
                   brickRow[rand.nextInt(colCount)] = true;
                 }
                 return brickRow;
               });
-              // Optionally, increase ball speed for challenge
               ballVX *= 1.05;
               ballVY *= 1.05;
             }
@@ -341,6 +324,21 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
       paddleX = dx - paddleWidth / 2;
       paddleX = paddleX.clamp(0, width - paddleWidth);
     });
+  }
+
+  void _togglePause() {
+    if (!isPlaying || isGameOver) return;
+    setState(() {
+      isPaused = !isPaused;
+    });
+    GameHaptics.light();
+  }
+
+  void _resume() {
+    setState(() {
+      isPaused = false;
+    });
+    GameHaptics.light();
   }
 
   @override
@@ -378,6 +376,12 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
             ],
             tip: 'Use the paddle edges to change the bounce angle and recover control.',
           ),
+          if (isPlaying && !isGameOver)
+            IconButton(
+              icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
+              color: neonBlue,
+              onPressed: _togglePause,
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(
@@ -437,83 +441,94 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                return GestureDetector(
-                  onHorizontalDragUpdate: (details) {
-                    if (isPlaying) {
-                      _movePaddleTo(details.localPosition.dx, width);
-                    }
-                  },
-                  behavior: HitTestBehavior.translucent,
-                  child: Stack(
-                    children: [
-                      ..._buildBricks(width, atlas),
-                      Positioned(
-                        left: paddleX,
-                        top: paddleTop,
-                        child: _spriteBox(
-                          sprite: atlas.paddle,
-                          width: paddleWidth,
-                          height: paddleHeight,
-                        ),
-                      ),
-                      Positioned(
-                        left: ballX - ballRadius,
-                        top: ballY - ballRadius,
-                        child: _spriteBox(
-                          sprite: atlas.ball,
-                          width: ballRadius * 2,
-                          height: ballRadius * 2,
-                        ),
-                      ),
-                      if (isGameOver)
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 32,
-                              vertical: 24,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: neonBlue, width: 3),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: neonBlue.withOpacity(0.4),
-                                  blurRadius: 18,
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Game Over',
-                                  style: TextStyle(
-                                    fontSize: 32,
-                                    fontFamily: 'Orbitron',
-                                    color: neonRed,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                    shadows: [
-                                      Shadow(
-                                        color: neonRed.withOpacity(0.5),
-                                        blurRadius: 8,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                _neonButton(
-                                  'Restart',
-                                  () => _startGame(width, height),
-                                  neonRed,
-                                ),
-                              ],
+                return Stack(
+                  children: [
+                    GestureDetector(
+                      onHorizontalDragUpdate: (details) {
+                        if (isPlaying && !isPaused) {
+                          _movePaddleTo(details.localPosition.dx, width);
+                        }
+                      },
+                      behavior: HitTestBehavior.translucent,
+                      child: Stack(
+                        children: [
+                          ..._buildBricks(width, atlas),
+                          Positioned(
+                            left: paddleX,
+                            top: paddleTop,
+                            child: _spriteBox(
+                              sprite: atlas.paddle,
+                              width: paddleWidth,
+                              height: paddleHeight,
                             ),
                           ),
-                        ),
-                    ],
-                  ),
+                          Positioned(
+                            left: ballX - ballRadius,
+                            top: ballY - ballRadius,
+                            child: _spriteBox(
+                              sprite: atlas.ball,
+                              width: ballRadius * 2,
+                              height: ballRadius * 2,
+                            ),
+                          ),
+                          if (isGameOver)
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 24,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(color: neonBlue, width: 3),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: neonBlue.withOpacity(0.4),
+                                      blurRadius: 18,
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Game Over',
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontFamily: 'Orbitron',
+                                        color: neonRed,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 2,
+                                        shadows: [
+                                          Shadow(
+                                            color: neonRed.withOpacity(0.5),
+                                            blurRadius: 8,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    _neonButton(
+                                      'Restart',
+                                      () => _startGame(width, height),
+                                      neonRed,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (isPaused)
+                      GamePauseOverlay(
+                        onResume: _resume,
+                        onRestart: () => _startGame(width, height),
+                        onQuit: () => Navigator.of(context).pop(),
+                        accentColor: neonBlue,
+                      ),
+                  ],
                 );
               },
             ),
