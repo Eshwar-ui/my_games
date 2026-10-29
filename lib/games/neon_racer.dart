@@ -30,6 +30,9 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
   int highScore = 0;
   double speed = 5.0;
   DateTime? lastSpawnTime;
+  double _trackHeight = 800;
+  double _playerTop = 580;
+  double _carHeight = 160;
   // Individual car images: [player, enemy1, enemy2, enemy3]
   List<ui.Image?> carImages = [null, null, null, null];
   bool spritesLoaded = false;
@@ -90,7 +93,10 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
       lastSpawnTime = DateTime.now();
     });
     gameTimer?.cancel();
-    gameTimer = Timer.periodic(const Duration(milliseconds: 16), (timer) => _update());
+    gameTimer = Timer.periodic(
+      const Duration(milliseconds: 16),
+      (timer) => _update(),
+    );
   }
 
   void _update() {
@@ -103,18 +109,26 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
       }
 
       // Remove off-screen obstacles
-      obstacles.removeWhere((o) => o.y > 800);
+      obstacles.removeWhere((o) => o.y > _trackHeight + _carHeight);
 
       // Spawn new obstacles
       final now = DateTime.now();
-      if (lastSpawnTime == null || now.difference(lastSpawnTime!).inMilliseconds > (1500 - speed * 50).clamp(500, 1500)) {
-        obstacles.add(_Obstacle(lane: Random().nextInt(3), type: Random().nextInt(3)));
+      if (lastSpawnTime == null ||
+          now.difference(lastSpawnTime!).inMilliseconds >
+              (1500 - speed * 50).clamp(500, 1500)) {
+        obstacles.add(
+          _Obstacle(lane: Random().nextInt(3), type: Random().nextInt(3)),
+        );
         lastSpawnTime = now;
       }
 
       // Check collisions
       for (var obstacle in obstacles) {
-        if (obstacle.lane == playerLane.round() && obstacle.y > 550 && obstacle.y < 650) {
+        final obstacleBottom = obstacle.y + _carHeight;
+        final playerBottom = _playerTop + _carHeight;
+        final overlapsPlayer =
+            obstacleBottom > _playerTop + 18 && obstacle.y < playerBottom - 18;
+        if (obstacle.lane == playerLane.round() && overlapsPlayer) {
           _endGame();
           return;
         }
@@ -161,22 +175,31 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
   }
 
   void _moveLeft() {
-    if (isPaused) return;
-    if (playerLane > 0) {
+    _changeLane(-1);
+  }
+
+  void _moveRight() {
+    _changeLane(1);
+  }
+
+  void _changeLane(int direction) {
+    if (!isStarted || isGameOver || isPaused) return;
+    final nextLane = (playerLane + direction).clamp(0.0, 2.0).toDouble();
+    if (nextLane != playerLane) {
       setState(() {
-        playerLane--;
+        playerLane = nextLane;
       });
       GameHaptics.tap();
     }
   }
 
-  void _moveRight() {
-    if (isPaused) return;
-    if (playerLane < 2) {
-      setState(() {
-        playerLane++;
-      });
-      GameHaptics.tap();
+  void _handleLaneSwipe(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 180) return;
+    if (velocity < 0) {
+      _moveLeft();
+    } else {
+      _moveRight();
     }
   }
 
@@ -202,7 +225,7 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
             title: 'Neon Racer',
             accent: neonBlue,
             steps: [
-              'Swipe left or right to change lanes.',
+              'Swipe left or right, or tap either side, to change lanes.',
               'Avoid obstacles and keep your speed up!',
               'Game gets faster every 500 points.',
             ],
@@ -212,6 +235,7 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
             IconButton(
               icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
               color: neonBlue,
+              tooltip: isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
           Padding(
@@ -229,156 +253,217 @@ class _NeonRacerState extends State<NeonRacer> with TickerProviderStateMixin {
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          // Background "Road"
-          Positioned.fill(
-            child: Row(
-              children: List.generate(3, (index) => Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(color: Colors.white.withOpacity(0.05), width: 1),
-                      right: index == 2 ? BorderSide(color: Colors.white.withOpacity(0.05), width: 1) : BorderSide.none,
-                    ),
-                  ),
-                ),
-              )),
-            ),
-          ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final trackWidth = constraints.maxWidth;
+            final trackHeight = constraints.maxHeight;
+            final laneWidth = trackWidth / 3;
+            final laneInset = laneWidth < 90 ? 6.0 : 10.0;
+            final carWidth = max(42.0, laneWidth - (laneInset * 2));
+            final carHeight = min(160.0, max(96.0, trackHeight * 0.22));
+            final playerTop = max(96.0, trackHeight - carHeight - 28);
 
-          // Obstacles
-          ...obstacles.map((o) => Positioned(
-            left: MediaQuery.of(context).size.width / 3 * o.lane + 10,
-            top: o.y,
-            width: MediaQuery.of(context).size.width / 3 - 20,
-            height: 160,
-            child: (!spritesLoaded || carImages[o.type + 1] == null)
-              ? Container(
-                  decoration: BoxDecoration(
-                    color: neonRed.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: neonRed, width: 2),
-                  ),
-                  child: const Icon(Icons.warning_amber_rounded, color: neonRed),
-                )
-              : CustomPaint(
-                  painter: _CarPainter(image: carImages[o.type + 1]!),
-                ),
-          )),
+            _trackHeight = trackHeight;
+            _carHeight = carHeight;
+            _playerTop = playerTop;
 
-          // Player Car
-          Positioned(
-            left: MediaQuery.of(context).size.width / 3 * playerLane + 10,
-            top: 580,
-            width: MediaQuery.of(context).size.width / 3 - 20,
-            height: 160,
-            child: (!spritesLoaded || carImages[0] == null)
-              ? AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  decoration: BoxDecoration(
-                    color: neonBlue,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Center(child: Icon(Icons.rocket_rounded, color: Colors.white, size: 50)),
-                )
-              : CustomPaint(
-                  painter: _CarPainter(image: carImages[0]!),
-                ),
-          ),
+            double laneLeft(num lane) {
+              return laneWidth * lane.toDouble() + laneInset;
+            }
 
-          // Controls (Invisible Overlay)
-          Positioned.fill(
-            child: Row(
+            return Stack(
               children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _moveLeft,
-                    behavior: HitTestBehavior.opaque,
-                  ),
-                ),
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _moveRight,
-                    behavior: HitTestBehavior.opaque,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Score Overlay
-          Positioned(
-            top: 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(30),
-                  border: Border.all(color: neonBlue.withOpacity(0.5)),
-                ),
-                child: Text(
-                  'Score: $score',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontFamily: 'Orbitron',
-                    color: neonBlue,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Start / Game Over Screens
-          if (!isStarted || isGameOver)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withOpacity(0.8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (isGameOver)
-                      const Text(
-                        'CRASHED!',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontFamily: 'Orbitron',
-                          color: neonRed,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 4,
+                // Background "Road"
+                Positioned.fill(
+                  child: Row(
+                    children: List.generate(
+                      3,
+                      (index) => Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border(
+                              left: BorderSide(
+                                color: Colors.white.withOpacity(0.05),
+                                width: 1,
+                              ),
+                              right: index == 2
+                                  ? BorderSide(
+                                      color: Colors.white.withOpacity(0.05),
+                                      width: 1,
+                                    )
+                                  : BorderSide.none,
+                            ),
+                          ),
                         ),
                       ),
-                    const SizedBox(height: 24),
-                    Text(
-                      isGameOver ? 'Final Score: $score' : 'Neon Racer',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontFamily: 'Orbitron',
-                        color: Colors.white,
+                    ),
+                  ),
+                ),
+
+                // Obstacles
+                ...obstacles.map(
+                  (o) => Positioned(
+                    left: laneLeft(o.lane),
+                    top: o.y,
+                    width: carWidth,
+                    height: carHeight,
+                    child: (!spritesLoaded || carImages[o.type + 1] == null)
+                        ? Container(
+                            decoration: BoxDecoration(
+                              color: neonRed.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: neonRed, width: 2),
+                            ),
+                            child: const Icon(
+                              Icons.warning_amber_rounded,
+                              color: neonRed,
+                            ),
+                          )
+                        : CustomPaint(
+                            painter: _CarPainter(image: carImages[o.type + 1]!),
+                          ),
+                  ),
+                ),
+
+                // Player Car
+                Positioned(
+                  left: laneLeft(playerLane),
+                  top: playerTop,
+                  width: carWidth,
+                  height: carHeight,
+                  child: (!spritesLoaded || carImages[0] == null)
+                      ? AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          decoration: BoxDecoration(
+                            color: neonBlue,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.rocket_rounded,
+                              color: Colors.white,
+                              size: 50,
+                            ),
+                          ),
+                        )
+                      : CustomPaint(painter: _CarPainter(image: carImages[0]!)),
+                ),
+
+                // Controls
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onHorizontalDragEnd: _handleLaneSwipe,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Semantics(
+                            button: true,
+                            excludeSemantics: true,
+                            label: 'Move to the left lane',
+                            onTap: _moveLeft,
+                            child: GestureDetector(
+                              onTap: _moveLeft,
+                              behavior: HitTestBehavior.opaque,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Semantics(
+                            button: true,
+                            excludeSemantics: true,
+                            label: 'Move to the right lane',
+                            onTap: _moveRight,
+                            child: GestureDetector(
+                              onTap: _moveRight,
+                              behavior: HitTestBehavior.opaque,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Score Overlay
+                Positioned(
+                  top: 16,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: neonBlue.withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        'Score: $score',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontFamily: 'Orbitron',
+                          color: neonBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 48),
-                    ArcadeButton(
-                      label: isGameOver ? 'Try Again' : 'Start Engine',
-                      color: neonBlue,
-                      onPressed: _startGame,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          if (isPaused)
-            GamePauseOverlay(
-              onResume: _resume,
-              onRestart: _startGame,
-              onQuit: () => Navigator.of(context).pop(),
-              accentColor: const Color(0xFF00FFF7),
-            ),
-        ],
+
+                // Start / Game Over Screens
+                if (!isStarted || isGameOver)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withOpacity(0.8),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (isGameOver)
+                            const Text(
+                              'CRASHED!',
+                              style: TextStyle(
+                                fontSize: 48,
+                                fontFamily: 'Orbitron',
+                                color: neonRed,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 4,
+                              ),
+                            ),
+                          const SizedBox(height: 24),
+                          Text(
+                            isGameOver ? 'Final Score: $score' : 'Neon Racer',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontFamily: 'Orbitron',
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 48),
+                          ArcadeButton(
+                            label: isGameOver ? 'Try Again' : 'Start Engine',
+                            color: neonBlue,
+                            onPressed: _startGame,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (isPaused)
+                  GamePauseOverlay(
+                    onResume: _resume,
+                    onRestart: _startGame,
+                    onQuit: () => Navigator.of(context).pop(),
+                    accentColor: const Color(0xFF00FFF7),
+                  ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

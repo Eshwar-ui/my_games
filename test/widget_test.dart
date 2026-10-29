@@ -12,9 +12,10 @@ void main() {
 
   testWidgets('Game selection screen loads', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
-    expect(find.text('Select a Game'), findsOneWidget);
+    expect(find.text('RETRO GAMES'), findsOneWidget);
+    expect(find.text('Pick a Neon Run.'), findsOneWidget);
     expect(find.text('Tic-Tac-Toe'), findsOneWidget);
-    expect(find.text('Space War'), findsOneWidget);
+    expect(find.text('Fast duels and clean strategy.'), findsOneWidget);
   });
 
   testWidgets('2048 starts with two visible tiles', (WidgetTester tester) async {

@@ -48,7 +48,11 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
   }
 
   Future<void> _handleTap(int index) async {
-    if (_isPaused || _locked || _won || _cards[index].matched || _cards[index].revealed) {
+    if (_isPaused ||
+        _locked ||
+        _won ||
+        _cards[index].matched ||
+        _cards[index].revealed) {
       return;
     }
 
@@ -144,6 +148,7 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
             IconButton(
               icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
               color: accent,
+              tooltip: _isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
           IconButton(
@@ -175,50 +180,64 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
                   ),
                   const SizedBox(height: 16),
                   Expanded(
-                    child: GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _cards.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 4,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                      ),
-                      itemBuilder: (context, index) {
-                        final card = _cards[index];
-                        final revealed = card.revealed || card.matched;
-                        return GestureDetector(
-                          onTap: () => _handleTap(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            decoration: BoxDecoration(
-                              color: revealed
-                                  ? accent.withOpacity(card.matched ? 0.2 : 0.14)
-                                  : const Color(0xFF24193D),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: revealed ? accent : Colors.white24,
-                                width: 2,
-                              ),
-                              boxShadow: revealed
-                                  ? [
-                                      BoxShadow(
-                                        color: accent.withOpacity(0.25),
-                                        blurRadius: 14,
-                                      ),
-                                    ]
-                                  : const [],
-                            ),
-                            child: Center(
-                              child: Text(
-                                revealed ? card.symbol : '?',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: revealed ? accent : Colors.white54,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final gridMetrics = _gridMetrics(
+                          constraints.maxWidth,
+                          constraints.maxHeight,
+                        );
+
+                        return GridView.builder(
+                          physics: gridMetrics.fits
+                              ? const NeverScrollableScrollPhysics()
+                              : const BouncingScrollPhysics(),
+                          itemCount: _cards.length,
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: gridMetrics.columns,
+                            mainAxisSpacing: gridMetrics.spacing,
+                            crossAxisSpacing: gridMetrics.spacing,
+                          ),
+                          itemBuilder: (context, index) {
+                            final card = _cards[index];
+                            final revealed = card.revealed || card.matched;
+                            return GestureDetector(
+                              onTap: () => _handleTap(index),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                decoration: BoxDecoration(
+                                  color: revealed
+                                      ? accent.withOpacity(
+                                          card.matched ? 0.2 : 0.14,
+                                        )
+                                      : const Color(0xFF24193D),
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: revealed ? accent : Colors.white24,
+                                    width: 2,
+                                  ),
+                                  boxShadow: revealed
+                                      ? [
+                                          BoxShadow(
+                                            color: accent.withOpacity(0.25),
+                                            blurRadius: 14,
+                                          ),
+                                        ]
+                                      : const [],
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    revealed ? card.symbol : '?',
+                                    style: TextStyle(
+                                      fontSize: gridMetrics.fontSize,
+                                      fontWeight: FontWeight.bold,
+                                      color: revealed ? accent : Colors.white54,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                         );
                       },
                     ),
@@ -281,6 +300,46 @@ class _MemoryMatchGameState extends State<MemoryMatchGame> {
       ),
     );
   }
+
+  _GridMetrics _gridMetrics(double width, double height) {
+    const spacing = 12.0;
+    const candidates = [4, 5, 6, 8];
+
+    for (final columns in candidates) {
+      final cardSize = (width - spacing * (columns - 1)) / columns;
+      final rows = (_cards.length / columns).ceil();
+      final gridHeight = cardSize * rows + spacing * (rows - 1);
+      if (gridHeight <= height || columns == candidates.last) {
+        return _GridMetrics(
+          columns: columns,
+          spacing: spacing,
+          fontSize: (cardSize * 0.36).clamp(18.0, 28.0).toDouble(),
+          fits: gridHeight <= height,
+        );
+      }
+    }
+
+    return _GridMetrics(
+      columns: 4,
+      spacing: spacing,
+      fontSize: 28,
+      fits: false,
+    );
+  }
+}
+
+class _GridMetrics {
+  const _GridMetrics({
+    required this.columns,
+    required this.spacing,
+    required this.fontSize,
+    required this.fits,
+  });
+
+  final int columns;
+  final double spacing;
+  final double fontSize;
+  final bool fits;
 }
 
 class _MemoryCard {

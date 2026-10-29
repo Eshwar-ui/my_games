@@ -261,6 +261,7 @@ class _FlappyBirdGameState extends State<FlappyBirdGame> {
                 IconButton(
                   icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
                   color: const Color(0xFFFFFF00),
+                  tooltip: isPaused ? 'Resume game' : 'Pause game',
                   onPressed: _togglePause,
                 ),
               Padding(

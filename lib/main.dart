@@ -140,15 +140,9 @@ class GameSelectionScreen extends StatelessWidget {
         child: SafeArea(
           child: CustomScrollView(
             slivers: [
-              // SliverToBoxAdapter(
-              //   child: Padding(
-              //     padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-              //     child: _HomeHero(totalGames: games.length),
-              //   ),
-              // ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
                   child: Row(
                     children: [
                       _HeaderActionButton(
@@ -193,6 +187,12 @@ class GameSelectionScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+                  child: _HomeHero(totalGames: games.length),
+                ),
+              ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 sliver: SliverLayoutBuilder(
@@ -200,9 +200,18 @@ class GameSelectionScreen extends StatelessWidget {
                     final width = constraints.crossAxisExtent;
                     if (width <= 0) return const SliverToBoxAdapter();
 
-                    const columns = 2;
-                    final cardWidth = (width - 18) / columns;
-                    final cardHeight = cardWidth > 0 ? cardWidth : 200.0;
+                    final int columns;
+                    if (width >= 900) {
+                      columns = 4;
+                    } else if (width >= 640) {
+                      columns = 3;
+                    } else {
+                      columns = 2;
+                    }
+                    const spacing = 18.0;
+                    final cardWidth =
+                        (width - (spacing * (columns - 1))) / columns;
+                    final cardHeight = cardWidth.clamp(176.0, 220.0).toDouble();
 
                     return SliverGrid(
                       delegate: SliverChildBuilderDelegate((context, index) {
@@ -223,8 +232,8 @@ class GameSelectionScreen extends StatelessWidget {
                       }, childCount: games.length),
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
-                        mainAxisSpacing: 18,
-                        crossAxisSpacing: 18,
+                        mainAxisSpacing: spacing,
+                        crossAxisSpacing: spacing,
                         mainAxisExtent: cardHeight,
                       ),
                     );
@@ -304,19 +313,19 @@ class _HomeHero extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         const Text(
           'Pick a Neon Run.',
           style: TextStyle(
-            fontSize: 34,
+            fontSize: 30,
             height: 1.05,
             fontWeight: FontWeight.bold,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Text(
-          '$totalGames playable modes. Bigger tap targets, cleaner layouts, and fast restarts.',
+          '$totalGames playable modes with quick restarts, help, and local high scores.',
           style: TextStyle(
             fontSize: 15,
             height: 1.5,
@@ -327,9 +336,9 @@ class _HomeHero extends StatelessWidget {
     );
 
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(22),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -348,7 +357,7 @@ class _HomeHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     heroText,
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     _HeroBadge(totalGames: totalGames, compact: true),
                   ],
                 )
@@ -376,10 +385,10 @@ class _HeroBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: compact ? double.infinity : 176,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF0E2034).withOpacity(0.82),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFFFE66D).withOpacity(0.45)),
       ),
       child: Column(
@@ -392,7 +401,7 @@ class _HeroBadge extends StatelessWidget {
             size: 34,
             color: Color(0xFFFFE66D),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             '$totalGames',
             style: const TextStyle(
@@ -426,11 +435,11 @@ class _GameCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(20),
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -450,17 +459,17 @@ class _GameCard extends StatelessWidget {
             ],
           ),
           child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
                     Container(
-                      width: 56,
-                      height: 56,
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                         color: game.color.withOpacity(0.12),
                         border: Border.all(color: game.color.withOpacity(0.55)),
                       ),
@@ -476,6 +485,8 @@ class _GameCard extends StatelessWidget {
                 const Spacer(),
                 Text(
                   game.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -490,14 +501,16 @@ class _GameCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Text(
-                //   game.subtitle,
-                //   style: TextStyle(
-                //     fontSize: 14,
-                //     height: 1.45,
-                //     color: Colors.white.withOpacity(0.74),
-                //   ),
-                // ),
+                Text(
+                  game.subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: Colors.white.withOpacity(0.74),
+                  ),
+                ),
               ],
             ),
           ),

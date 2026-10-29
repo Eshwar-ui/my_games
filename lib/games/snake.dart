@@ -270,6 +270,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
             IconButton(
               icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
               color: neonGreen,
+              tooltip: isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
         ],
@@ -502,7 +503,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
   Widget _neonButton(String text, VoidCallback onPressed, Color color) {
     return ArcadeButton(label: text, color: color, onPressed: onPressed);
   }
-  }
+
 
   Widget _directionButton(IconData icon, Direction dir, Color color) {
     return Padding(
@@ -510,6 +511,7 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
       child: ArcadeIconButton(
         icon: icon,
         color: color,
+        semanticLabel: _directionLabel(dir),
         size: 74,
         iconSize: 34,
         onPressed: () {
@@ -524,5 +526,18 @@ class _SnakeGameState extends State<SnakeGame> with TickerProviderStateMixin {
         },
       ),
     );
+  }
+
+  String _directionLabel(Direction dir) {
+    switch (dir) {
+      case Direction.up:
+        return 'Move snake up';
+      case Direction.down:
+        return 'Move snake down';
+      case Direction.left:
+        return 'Move snake left';
+      case Direction.right:
+        return 'Move snake right';
+    }
   }
 }

@@ -60,32 +60,46 @@ class StatsDashboardScreen extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: [
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _SummaryCard(
-                      label: 'Total Plays',
-                      value: '$totalPlays',
-                      color: const Color(0xFF00FFF7),
-                    ),
-                    _SummaryCard(
-                      label: 'Wins',
-                      value: '$totalWins',
-                      color: const Color(0xFFFF00FF),
-                    ),
-                    _SummaryCard(
-                      label: 'Best Streak',
-                      value: '$bestStreak',
-                      color: const Color(0xFF39FF14),
-                    ),
-                    _SummaryCard(
-                      label: 'Top Score',
-                      value: '$topScore',
-                      color: const Color(0xFFFFC857),
-                    ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 720 ? 4 : 2;
+                    const spacing = 12.0;
+                    final cardWidth =
+                        (constraints.maxWidth - spacing * (columns - 1)) /
+                        columns;
+
+                    return Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: spacing,
+                      runSpacing: spacing,
+                      children: [
+                        _SummaryCard(
+                          label: 'Total Plays',
+                          value: '$totalPlays',
+                          color: const Color(0xFF00FFF7),
+                          width: cardWidth,
+                        ),
+                        _SummaryCard(
+                          label: 'Wins',
+                          value: '$totalWins',
+                          color: const Color(0xFFFF00FF),
+                          width: cardWidth,
+                        ),
+                        _SummaryCard(
+                          label: 'Best Streak',
+                          value: '$bestStreak',
+                          color: const Color(0xFF39FF14),
+                          width: cardWidth,
+                        ),
+                        _SummaryCard(
+                          label: 'Top Score',
+                          value: '$topScore',
+                          color: const Color(0xFFFFC857),
+                          width: cardWidth,
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 22),
                 const Text(
@@ -137,16 +151,18 @@ class _SummaryCard extends StatelessWidget {
     required this.label,
     required this.value,
     required this.color,
+    required this.width,
   });
 
   final String label;
   final String value;
   final Color color;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: MediaQuery.of(context).size.width * 0.4,
+      width: width,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF201533),
@@ -342,4 +358,5 @@ const Map<String, _GameMeta> _gameCatalog = {
   'flappy_bird': _GameMeta('Flappy Bird', Color(0xFFFFFF00)),
   'space_war': _GameMeta('Space War', Color(0xFF00FFF7)),
   'memory_match': _GameMeta('Memory Match', Color(0xFFFF6B6B)),
+  'neon_racer': _GameMeta('Neon Racer', Color(0xFFFF073A)),
 };

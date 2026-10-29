@@ -202,6 +202,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
             IconButton(
               icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
               color: neonBlue,
+              tooltip: _isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
           IconButton(
@@ -216,70 +217,92 @@ class _TicTacToeGameState extends State<TicTacToeGame>
       ),
       body: Stack(
         children: [
-          Center(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Billboard animation at the top (always on top)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: AnimatedBuilder(
-                    animation: _billboardController,
-                    builder: (context, child) {
-                      if (_winner == null) return const SizedBox.shrink();
-                      return SlideTransition(
-                        position: _billboardOffset,
-                        child: _buildBillboard(_winner!),
-                      );
-                    },
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final usableWidth = max(0.0, constraints.maxWidth - 40);
+                final usableHeight = max(0.0, constraints.maxHeight - 190);
+                final boardSize = min(
+                  320.0,
+                  max(210.0, min(usableWidth, usableHeight)),
+                );
+                final compact = constraints.maxHeight < 560;
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: max(0.0, constraints.maxHeight - 36),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Billboard animation at the top (always on top)
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: AnimatedBuilder(
+                            animation: _billboardController,
+                            builder: (context, child) {
+                              if (_winner == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return SlideTransition(
+                                position: _billboardOffset,
+                                child: _buildBillboard(_winner!),
+                              );
+                            },
+                          ),
+                        ),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (_isDraw)
+                              Text(
+                                'It\'s a Draw!',
+                                style: TextStyle(
+                                  fontSize: compact ? 24 : 28,
+                                  fontFamily: 'Orbitron',
+                                  fontWeight: FontWeight.bold,
+                                  color: neonYellow,
+                                  letterSpacing: 2,
+                                  shadows: [
+                                    Shadow(
+                                      color: neonYellow.withOpacity(0.5),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (_winner == null)
+                              Text(
+                                'Player $_currentPlayer\'s turn',
+                                style: TextStyle(
+                                  fontSize: compact ? 19 : 22,
+                                  fontFamily: 'Orbitron',
+                                  color: neonBlue,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 2,
+                                  shadows: [
+                                    Shadow(
+                                      color: neonBlue.withOpacity(0.5),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            SizedBox(height: compact ? 20 : 32),
+                            _buildBoard(neonBlue, neonPink, boardSize),
+                            SizedBox(height: compact ? 20 : 32),
+                            _neonButton('Restart', _resetGame, neonGreen),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (_isDraw)
-                      Text(
-                        'It\'s a Draw!',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontFamily: 'Orbitron',
-                          fontWeight: FontWeight.bold,
-                          color: neonYellow,
-                          letterSpacing: 2,
-                          shadows: [
-                            Shadow(
-                              color: neonYellow.withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (_winner == null)
-                      Text(
-                        'Player $_currentPlayer\'s turn',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontFamily: 'Orbitron',
-                          color: neonBlue,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 2,
-                          shadows: [
-                            Shadow(
-                              color: neonBlue.withOpacity(0.5),
-                              blurRadius: 8,
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 32),
-                    _buildBoard(neonBlue, neonPink),
-                    const SizedBox(height: 32),
-                    _neonButton('Restart', _resetGame, neonGreen),
-                  ],
-                ),
-              ],
+                );
+              },
             ),
           ),
           if (_isPaused)
@@ -294,9 +317,14 @@ class _TicTacToeGameState extends State<TicTacToeGame>
     );
   }
 
-  Widget _buildBoard(Color neonBlue, Color neonPink) {
+  Widget _buildBoard(Color neonBlue, Color neonPink, double boardSize) {
+    const boardPadding = 12.0;
+    final cellSize = (boardSize - (boardPadding * 2)) / gridSize;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: boardSize,
+      height: boardSize,
+      padding: const EdgeInsets.all(boardPadding),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: neonPink, width: 3),
@@ -315,7 +343,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
           return Row(
             mainAxisSize: MainAxisSize.min,
             children: List.generate(gridSize, (col) {
-              return _buildCell(row, col, neonBlue, neonPink);
+              return _buildCell(row, col, neonBlue, neonPink, cellSize);
             }),
           );
         }),
@@ -323,7 +351,13 @@ class _TicTacToeGameState extends State<TicTacToeGame>
     );
   }
 
-  Widget _buildCell(int row, int col, Color neonBlue, Color neonPink) {
+  Widget _buildCell(
+    int row,
+    int col,
+    Color neonBlue,
+    Color neonPink,
+    double cellSize,
+  ) {
     final value = _board[row][col];
     final isWinning = _winningCells[row][col];
     final isLoser = _winner != null && value != null && value != _winner;
@@ -348,9 +382,9 @@ class _TicTacToeGameState extends State<TicTacToeGame>
         opacity: opacity,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          width: 80,
-          height: 80,
-          margin: const EdgeInsets.all(6),
+          width: cellSize,
+          height: cellSize,
+          margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             border: Border.all(color: color, width: 3),
             borderRadius: BorderRadius.circular(12),
@@ -369,7 +403,7 @@ class _TicTacToeGameState extends State<TicTacToeGame>
             child: Text(
               value ?? '',
               style: TextStyle(
-                fontSize: 48,
+                fontSize: (cellSize * 0.52).clamp(28.0, 48.0).toDouble(),
                 fontFamily: 'Orbitron',
                 fontWeight: FontWeight.bold,
                 color: color,

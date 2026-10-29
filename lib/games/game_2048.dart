@@ -286,6 +286,7 @@ class _Game2048State extends State<Game2048> {
             IconButton(
               icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
               color: neonPink,
+              tooltip: isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
           Padding(

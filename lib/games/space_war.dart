@@ -491,6 +491,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                     IconButton(
                       icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
                       color: neonBlue,
+                      tooltip: isPaused ? 'Resume game' : 'Pause game',
                       onPressed: _togglePause,
                     ),
                   Padding(
@@ -551,6 +552,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                                   child: _controlButton(
                                     Icons.arrow_left,
                                     neonBlue,
+                                    semanticLabel: 'Move ship left',
                                     onPressStart: () => _startMoveRepeat(-1),
                                     onPressEnd: _stopMoveRepeat,
                                   ),
@@ -561,6 +563,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                                   child: _controlButton(
                                     Icons.bolt,
                                     neonGreen,
+                                    semanticLabel: 'Fire weapon',
                                     onPressStart: _startShootRepeat,
                                     onPressEnd: _stopShootRepeat,
                                   ),
@@ -571,6 +574,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
                                   child: _controlButton(
                                     Icons.arrow_right,
                                     neonPink,
+                                    semanticLabel: 'Move ship right',
                                     onPressStart: () => _startMoveRepeat(1),
                                     onPressEnd: _stopMoveRepeat,
                                   ),
@@ -823,6 +827,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
   Widget _controlButton(
     IconData icon,
     Color color, {
+    required String semanticLabel,
     VoidCallback? onPressed,
     VoidCallback? onPressStart,
     VoidCallback? onPressEnd,
@@ -830,6 +835,7 @@ class _SpaceWarGameState extends State<SpaceWarGame> {
     return ArcadeIconButton(
       icon: icon,
       color: color,
+      semanticLabel: semanticLabel,
       size: 72,
       hitSize: 88,
       iconSize: 30,

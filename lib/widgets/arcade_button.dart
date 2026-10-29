@@ -65,6 +65,7 @@ class ArcadeIconButton extends StatefulWidget {
     this.onPressed,
     this.onPressStart,
     this.onPressEnd,
+    this.semanticLabel,
     this.size = 72,
     this.iconSize = 36,
     this.hitSize = 96,
@@ -75,6 +76,7 @@ class ArcadeIconButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final VoidCallback? onPressStart;
   final VoidCallback? onPressEnd;
+  final String? semanticLabel;
   final double size;
   final double iconSize;
   final double hitSize;
@@ -93,9 +95,20 @@ class _ArcadeIconButtonState extends State<ArcadeIconButton> {
     });
   }
 
+  void _activateFromSemantics() {
+    if (widget.onPressed != null) {
+      widget.onPressed?.call();
+      return;
+    }
+
+    widget.onPressStart?.call();
+    widget.onPressEnd?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final isEnabled = widget.onPressed != null || widget.onPressStart != null;
+    final control = SizedBox(
       width: widget.hitSize,
       height: widget.hitSize,
       child: GestureDetector(
@@ -143,6 +156,22 @@ class _ArcadeIconButtonState extends State<ArcadeIconButton> {
             ),
           ),
         ),
+      ),
+    );
+
+    if (widget.semanticLabel == null) {
+      return control;
+    }
+
+    return Tooltip(
+      message: widget.semanticLabel!,
+      child: Semantics(
+        button: true,
+        enabled: isEnabled,
+        excludeSemantics: true,
+        label: widget.semanticLabel,
+        onTap: isEnabled ? _activateFromSemantics : null,
+        child: control,
       ),
     );
   }

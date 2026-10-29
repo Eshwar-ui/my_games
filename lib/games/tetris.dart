@@ -310,6 +310,7 @@ class _TetrisGameState extends State<TetrisGame> {
             IconButton(
               icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
               color: neonBlue,
+              tooltip: isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
           IconButton(
@@ -455,6 +456,7 @@ class _TetrisGameState extends State<TetrisGame> {
                                 Icons.arrow_left,
                                 () => _move(-1),
                                 const Color(0xFF1E90FF),
+                                semanticLabel: 'Move left',
                                 size: buttonSize,
                                 iconSize: iconSize,
                                 hitSize: buttonSize,
@@ -464,6 +466,7 @@ class _TetrisGameState extends State<TetrisGame> {
                                 Icons.rotate_right,
                                 _rotate,
                                 const Color(0xFFFF00FF),
+                                semanticLabel: 'Rotate piece',
                                 size: buttonSize,
                                 iconSize: iconSize,
                                 hitSize: buttonSize,
@@ -473,6 +476,7 @@ class _TetrisGameState extends State<TetrisGame> {
                                 Icons.arrow_right,
                                 () => _move(1),
                                 const Color(0xFFFFA500),
+                                semanticLabel: 'Move right',
                                 size: buttonSize,
                                 iconSize: iconSize,
                                 hitSize: buttonSize,
@@ -482,6 +486,7 @@ class _TetrisGameState extends State<TetrisGame> {
                                 Icons.arrow_downward,
                                 _drop,
                                 const Color(0xFF39FF14),
+                                semanticLabel: 'Drop piece',
                                 size: buttonSize,
                                 iconSize: iconSize,
                                 hitSize: buttonSize,
@@ -527,10 +532,12 @@ class _TetrisGameState extends State<TetrisGame> {
     double size = 64,
     double iconSize = 36,
     double? hitSize,
+    required String semanticLabel,
   }) {
     return ArcadeIconButton(
       icon: icon,
       color: color,
+      semanticLabel: semanticLabel,
       size: size,
       iconSize: iconSize,
       hitSize: hitSize ?? size,

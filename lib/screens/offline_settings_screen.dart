@@ -22,6 +22,7 @@ class _OfflineSettingsScreenState extends State<OfflineSettingsScreen> {
     '2048_high_score',
     'space_war_high_score',
     'flappy_bird_high_score',
+    'neon_racer_high_score',
     _audioEnabledKey,
     _vibrationEnabledKey,
     _difficultyKey,

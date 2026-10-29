@@ -380,6 +380,7 @@ class _BrickBreakerGameState extends State<BrickBreakerGame> {
             IconButton(
               icon: Icon(isPaused ? Icons.play_arrow : Icons.pause),
               color: neonBlue,
+              tooltip: isPaused ? 'Resume game' : 'Pause game',
               onPressed: _togglePause,
             ),
           Padding(
